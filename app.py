@@ -28,6 +28,8 @@ def show_answer(answer):
         with st.expander("SQL"):
             st.code(answer["sql"], language="sql")
         st.dataframe(answer["table"], hide_index=True)
+        if answer.get("truncated"):
+            st.caption(f"Showing the first {len(answer['table']):,} rows.")
 
 
 if "messages" not in st.session_state:
@@ -63,6 +65,7 @@ if question:
             "sql": result["sql"],
             "explanation": result["explanation"],
             "table": pd.DataFrame([list(row) for row in result["rows"]], columns=result["columns"]),
+            "truncated": result["truncated"],
         }
         show_answer(answer)
     st.session_state.messages.append({"role": "assistant", "content": answer})
