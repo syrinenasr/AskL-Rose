@@ -3,6 +3,7 @@ import pandas as pd
 
 from ask import answer_question
 from schema import get_schema, get_schema_text
+from semantic import format_semantic_layer, load_semantic_layer
 
 st.title("AskL-Rose")
 st.caption("Ask the AdventureWorks data warehouse a question in plain English.")
@@ -12,6 +13,12 @@ st.caption("Ask the AdventureWorks data warehouse a question in plain English.")
 def load_schema_text():
     """Load the schema text from the database once and reuse it for every question."""
     return get_schema_text(*get_schema())
+
+
+@st.cache_data
+def load_semantic_text():
+    """Load the semantic layer one time and reuse it for every question."""
+    return format_semantic_layer(load_semantic_layer())
 
 
 def show_answer(answer):
@@ -45,7 +52,7 @@ if question:
     with st.chat_message("assistant"):
         try:
             with st.spinner("Writing SQL and running it..."):
-                result = answer_question(question, load_schema_text())
+                result = answer_question(question, load_schema_text(), load_semantic_text())
         except Exception as e:
             error = f"The query failed: {e}"
             st.error(error)

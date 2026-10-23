@@ -14,9 +14,9 @@ def run_query(query):
     return columns, rows
 
 
-def answer_question(question, schema_text):
+def answer_question(question, schema_text, semantic_text):
     """Turn a question into SQL, run it, and return the SQL, explanation, columns and rows."""
-    response = generate_sql(question, schema_text)
+    response = generate_sql(question, schema_text, semantic_text)
     sql = response["sql"]
     columns, rows = run_query(sql)
     return {
@@ -28,6 +28,9 @@ def answer_question(question, schema_text):
 
 
 if __name__ == "__main__":
+    from semantic import format_semantic_layer, load_semantic_layer
+
     schema_text = get_schema_text(*get_schema())
+    semantic_text = format_semantic_layer(load_semantic_layer())
     question = "What are the first 10 customers?"
-    print(answer_question(question, schema_text))
+    print(answer_question(question, schema_text, semantic_text))

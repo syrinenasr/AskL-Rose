@@ -8,7 +8,8 @@ MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5-coder:7b")
 SYSTEM_PROMPT = """You write T-SQL queries for Microsoft SQL Server.
 Use only the tables and columns listed in the schema.
 Join tables using the relationships listed in the schema.
-Write a single SELECT statement. Never modify data."""
+Write a single SELECT statement. Never modify data.
+When the question uses a business term or metric from the business definitions, use that definition exactly."""
 
 # The shape of the answer we require from the model (a JSON schema).
 ANSWER_FORMAT = {
@@ -21,13 +22,13 @@ ANSWER_FORMAT = {
 }
 
 
-def generate_sql(question, schema_text):
+def generate_sql(question, schema_text, semantic_text):
     """Ask the local LLM to write T-SQL for a question. Returns {"sql": ..., "explanation": ...}."""
     response = ollama.chat(
         model=MODEL,
-        messages=[  
+        messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"Schema:\n{schema_text}\n\nQuestion: {question}"},
+            {"role": "user", "content": f"Schema:\n{schema_text}\n\nBusiness definitions:\n{semantic_text}\n\nQuestion: {question}"},
         ],
         format=ANSWER_FORMAT,
         options={"temperature": 0},
@@ -37,8 +38,11 @@ def generate_sql(question, schema_text):
 
 if __name__ == "__main__":
     from schema import get_schema, get_schema_text
+    from semantic import format_semantic_layer, load_semantic_layer
 
-    answer = generate_sql("total internet sales per calendar year", get_schema_text(*get_schema()))
+    schema_text = get_schema_text(*get_schema())
+    semantic_text = format_semantic_layer(load_semantic_layer())
+    answer = generate_sql("total internet sales per calendar year", schema_text, semantic_text)
     print(answer["sql"])
     print()
     print(answer["explanation"])

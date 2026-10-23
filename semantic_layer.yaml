@@ -1,0 +1,87 @@
+# Business definitions for AdventureWorksDW2022.
+# The model gets these with the schema, so it uses one trusted definition
+# of each business word instead of guessing.
+
+metrics:
+  - name: units sold
+    synonyms: [sold, quantity, how many, number of items]
+    sql: SUM(OrderQuantity)
+    notes: Count units with SUM(OrderQuantity). COUNT(*) counts order lines, not units.
+
+  - name: internet sales revenue
+    synonyms: [revenue, sales, sales amount, turnover, online sales]
+    sql: SUM(FactInternetSales.SalesAmount)
+
+  - name: reseller sales revenue
+    synonyms: [reseller sales, sales through shops, sales to resellers]
+    sql: SUM(FactResellerSales.SalesAmount)
+
+  - name: total sales revenue
+    synonyms: [all sales, total revenue, internet and reseller sales]
+    sql: SUM(SalesAmount) of FactInternetSales plus SUM(SalesAmount) of FactResellerSales
+    notes: Add the two totals; never join the two fact tables to each other.
+
+  - name: gross profit
+    synonyms: [profit, margin]
+    sql: SUM(SalesAmount) - SUM(TotalProductCost)
+
+  - name: number of orders
+    synonyms: [orders, order count]
+    sql: COUNT(DISTINCT SalesOrderNumber)
+    notes: One order has several lines, so COUNT(*) is too high.
+
+  - name: number of customers
+    synonyms: [customers, customer count, buyers]
+    sql: COUNT(DISTINCT FactInternetSales.CustomerKey)
+    notes: Customers who bought online. For all registered customers, count DimCustomer instead.
+
+terms:
+  - name: product category
+    synonyms: [bikes, bike, bicycles, components, clothing, accessories, category]
+    sql: DimProductCategory.EnglishProductCategoryName = 'Bikes'  (or 'Components', 'Clothing', 'Accessories')
+    joins: FactInternetSales.ProductKey -> DimProduct.ProductKey; DimProduct.ProductSubcategoryKey -> DimProductSubcategory.ProductSubcategoryKey; DimProductSubcategory.ProductCategoryKey -> DimProductCategory.ProductCategoryKey
+    notes: Bikes, Components, Clothing and Accessories are categories. Never search product names for "bike".
+
+  - name: product subcategory
+    synonyms: [subcategory, road bikes, mountain bikes, helmets, jerseys]
+    sql: DimProductSubcategory.EnglishProductSubcategoryName
+    joins: FactInternetSales.ProductKey -> DimProduct.ProductKey; DimProduct.ProductSubcategoryKey -> DimProductSubcategory.ProductSubcategoryKey
+
+  - name: product name
+    synonyms: [product, model]
+    sql: DimProduct.EnglishProductName
+
+  - name: year
+    synonyms: [in 2011, per year, yearly, calendar year]
+    sql: DimDate.CalendarYear
+    joins: FactInternetSales.OrderDateKey -> DimDate.DateKey
+    notes: Use the order date unless the question says ship date or due date. Sales data covers 2010 to 2014.
+
+  - name: fiscal year
+    synonyms: [FY, financial year]
+    sql: DimDate.FiscalYear
+    joins: FactInternetSales.OrderDateKey -> DimDate.DateKey
+
+  - name: quarter and month
+    synonyms: [quarter, Q1, month, monthly]
+    sql: DimDate.CalendarQuarter, DimDate.MonthNumberOfYear, DimDate.EnglishMonthName
+    joins: FactInternetSales.OrderDateKey -> DimDate.DateKey
+    notes: Group and sort months by MonthNumberOfYear, not by the month name.
+
+  - name: customer country
+    synonyms: [country, per country, by country, city, region]
+    sql: DimGeography.EnglishCountryRegionName (or DimGeography.City)
+    joins: FactInternetSales.CustomerKey -> DimCustomer.CustomerKey; DimCustomer.GeographyKey -> DimGeography.GeographyKey
+    notes: Internet sales reach geography through the customer; FactInternetSales has no GeographyKey.
+
+  - name: reseller country
+    synonyms: [reseller country, shop country]
+    sql: DimGeography.EnglishCountryRegionName
+    joins: FactResellerSales.ResellerKey -> DimReseller.ResellerKey; DimReseller.GeographyKey -> DimGeography.GeographyKey
+
+rules:
+  - When a question says "sold" or "sales" without naming a channel, use internet sales (FactInternetSales) only, and say so in the explanation.
+  - Product names are in DimProduct.EnglishProductName. There is no ProductName column.
+  - Filter dates by joining DimDate on OrderDateKey; don't compare date keys with subqueries.
+  - For questions "per year", "per month" or "over time", sort the result by time (ORDER BY).
+  - For "top N" questions, use SELECT TOP N with ORDER BY the measure DESC.

@@ -2,22 +2,24 @@
 
 Ask a data warehouse questions in plain English. A local LLM writes the T-SQL, the app runs it on SQL Server and shows the results in a chat.
 
-> 🚧 **Work in progress.** The chatbox works end to end today; safety checks, business definitions and an evaluation are next (see the roadmap).
+> 🚧 **Work in progress.** The chatbox and the semantic layer work end to end today; safety checks, self-repair and an evaluation are next (see the roadmap).
 
 ## What works now
 
 **A chatbox** (Streamlit) where you type a question and get the model's explanation, the SQL it wrote, and the result table. The conversation stays on screen, and a query that fails shows its SQL Server error instead of crashing.
 
 ```
-question ──► schema text + question ──► local LLM (Ollama) writes T-SQL ──► SQL Server runs it ──► table
+question ──► schema + business definitions + question ──► local LLM (Ollama) writes T-SQL ──► SQL Server runs it ──► table
 ```
 
 | File | Its job |
 |---|---|
 | `app.py` | the chatbox: shows questions, answers and errors |
 | `ask.py` | `answer_question()`: question → SQL → columns and rows |
-| `llm.py` | `generate_sql()`: sends the schema and the question to the model, gets back `{"sql", "explanation"}` as JSON |
+| `llm.py` | `generate_sql()`: sends the schema, the business definitions and the question to the model, gets back `{"sql", "explanation"}` as JSON |
 | `schema.py` | reads the tables, columns and foreign keys, and formats them as text for the model |
+| `semantic_layer.yaml` | the semantic layer: business definitions of metrics, terms and rules (see below) |
+| `semantic.py` | reads `semantic_layer.yaml` and formats it as text for the model |
 | `db.py` | opens the connection to SQL Server |
 
 The model runs **on your machine** with [Ollama](https://ollama.com): no data leaves it. The default is `qwen2.5-coder:7b`; set `OLLAMA_MODEL` to try another one.
@@ -34,6 +36,69 @@ docker compose up -d
 ```
 
 AdventureWorksDW is a star schema for a fictional bike company: internet and reseller sales facts, with date, product, customer, geography and promotion dimensions.
+
+## The semantic layer
+
+The schema tells the model which tables and columns exist, but not what the business words mean. Without that, it guesses. `semantic_layer.yaml` gives it **one trusted definition of each metric and business term**, the same idea as the dbt Semantic Layer or Power BI measures, so people and the AI use the same definitions.
+
+It has three sections:
+
+| Section | What it defines | Examples |
+|---|---|---|
+| `metrics` | things you measure | units sold = `SUM(OrderQuantity)`; number of orders = `COUNT(DISTINCT SalesOrderNumber)`; revenue, gross profit, customers |
+| `terms` | business words, with the joins to reach them | *bikes* is the product category `Bikes` (product → subcategory → category); *in 2011* is `DimDate.CalendarYear` through `OrderDateKey`; country goes through the customer |
+| `rules` | facts the model kept getting wrong | "sales" without a channel means internet sales; there is no `ProductName` column; sort results that are per year or per month |
+
+Each entry has a `name` and its `sql`, plus optional `synonyms`, `joins` and `notes`:
+
+```yaml
+terms:
+  - name: product category
+    synonyms: [bikes, bike, bicycles, components, clothing, accessories, category]
+    sql: DimProductCategory.EnglishProductCategoryName = 'Bikes'  (or 'Components', 'Clothing', 'Accessories')
+    joins: FactInternetSales.ProductKey -> DimProduct.ProductKey; DimProduct.ProductSubcategoryKey -> DimProductSubcategory.ProductSubcategoryKey; DimProductSubcategory.ProductCategoryKey -> DimProductCategory.ProductCategoryKey
+    notes: Bikes, Components, Clothing and Accessories are categories. Never search product names for "bike".
+```
+
+Every table, column and value in the file was checked against the database. To add a definition, add an entry to the YAML file and restart the app.
+
+### Before and after
+
+Same model (`qwen2.5-coder:7b`), same question, temperature 0: **"how many bikes were sold in 2011"**.
+
+**Before, with the schema only:** SQL Server rejects the query.
+
+```sql
+SELECT COUNT(*) FROM FactInternetSales AS fis
+JOIN DimProduct AS dp ON fis.ProductKey = dp.ProductKey
+WHERE dp.ProductName LIKE '%bike%'
+  AND fis.OrderDateKey BETWEEN (SELECT DateKey FROM DimDate WHERE CalendarYear = 2011 AND CalendarQuarter = 1)
+                           AND (SELECT DateKey FROM DimDate WHERE CalendarYear = 2011 AND CalendarQuarter = 4)
+-- Invalid column name 'ProductName'.
+```
+
+Four mistakes: the column is `EnglishProductName`; "bikes" is a category, not a word in product names; `COUNT(*)` counts order lines, not bikes; and each date subquery returns about 90 rows where `BETWEEN` needs one value.
+
+**After, with the semantic layer:** the right answer, **2,216** bikes.
+
+```sql
+SELECT SUM(FactInternetSales.OrderQuantity) AS TotalBikesSold
+FROM FactInternetSales
+JOIN DimProduct            ON FactInternetSales.ProductKey = DimProduct.ProductKey
+JOIN DimProductSubcategory ON DimProduct.ProductSubcategoryKey = DimProductSubcategory.ProductSubcategoryKey
+JOIN DimProductCategory    ON DimProductSubcategory.ProductCategoryKey = DimProductCategory.ProductCategoryKey
+JOIN DimDate               ON FactInternetSales.OrderDateKey = DimDate.DateKey
+WHERE DimProductCategory.EnglishProductCategoryName = 'Bikes'
+  AND DimDate.CalendarYear = 2011
+```
+
+It used each definition: *units sold* (`SUM(OrderQuantity)`), the *product category* join path, and *year* through `DimDate`. The rules also fixed smaller problems in other questions:
+
+| Question | Before | After |
+|---|---|---|
+| how many bikes were sold in 2011 | ❌ error: `Invalid column name 'ProductName'` | ✅ 2,216 |
+| total internet sales per calendar year | ⚠️ right totals, years unsorted | ✅ sorted 2010 → 2014 |
+| number of customers per country | ✅ right, unsorted | ✅ right, sorted by number of customers |
 
 ## Run it
 
@@ -93,7 +158,7 @@ uv run --env-file .env streamlit run app.py
 
 It opens at `http://localhost:8501`. Try *"number of customers per country"* or *"total internet sales per calendar year"*.
 
-To test without the web page: `uv run --env-file .env python ask.py`.
+To test without the web page: `uv run --env-file .env python ask.py`. To see the text the model gets from the semantic layer: `uv run python semantic.py`.
 
 **Troubleshooting, macOS:** `OpenSSL library could not be loaded, make sure OpenSSL 1.0, 1.1, or 3.0 is installed` means Homebrew's `openssl` points to OpenSSL 4 (installing Ollama with Homebrew can do this), which the SQL Server driver doesn't support. Add this line to `.env` and start the app with `--env-file .env` as above:
 
@@ -103,7 +168,7 @@ DYLD_LIBRARY_PATH=/opt/homebrew/opt/openssl@3/lib
 
 ### Known limits
 
-The 7B model guesses well on one or two tables but often fails on longer joins or business words. For example, *"how many bikes were sold in 2011"* produces a column that doesn't exist (`ProductName` instead of `EnglishProductName`), searches product names for "bike" instead of using the *Bikes* category, and counts order lines instead of quantities. The semantic layer and self-repair steps below are meant to fix this.
+The 7B model handles questions well when the semantic layer defines their words. Questions with business words the YAML file doesn't define, or with many joins, can still produce wrong SQL or a SQL Server error, and the model doesn't retry yet. Two ideas from the roadmap address this: self-repair (send the error back to the model once) and an evaluation set that measures how often answers are right.
 
 ## Roadmap
 
@@ -112,7 +177,7 @@ The 7B model guesses well on one or two tables but often fails on longer joins o
 - [x] Python project with uv: connection to SQL Server and a schema reader
 - [x] Local LLM (Ollama) writes T-SQL from the schema and the question
 - [x] Web interface: Streamlit chatbox with conversation history
-- [ ] Semantic layer: business definitions such as revenue, fiscal year and the order date
+- [x] Semantic layer: business definitions of metrics, terms and rules (`semantic_layer.yaml`)
 - [ ] Safety: only SELECT statements, a read-only login, row limits and timeouts
 - [ ] Self-repair: send SQL errors back to the model once
 - [ ] Evaluation: 50 test questions, scored by comparing query results; compare models
