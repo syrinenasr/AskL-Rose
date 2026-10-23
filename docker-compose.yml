@@ -23,6 +23,7 @@ services:
     container_name: sql_init
     environment:
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
     depends_on:
       db: 
         condition: service_healthy

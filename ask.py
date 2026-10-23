@@ -1,6 +1,7 @@
 from db import connect
 from llm import generate_sql
 from schema import get_schema, get_schema_text
+from safety import check_sql
 
 
 def run_query(query):
@@ -23,6 +24,7 @@ def answer_question(question, schema_text, semantic_text):
     sql = response["sql"].strip()
     if not response["is_data_question"] or not sql:
         return {"sql": "", "columns": [], "rows": [], "explanation": response["explanation"]}
+    check_sql(sql)
     columns, rows = run_query(sql)
     return {
         "sql": sql,
