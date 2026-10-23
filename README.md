@@ -6,7 +6,7 @@ Ask a data warehouse questions in plain English. A local LLM writes the T-SQL, t
 
 ## What works now
 
-**A chatbox** (Streamlit) where you type a question and get the model's explanation, the SQL it wrote, and the result table. The conversation stays on screen, and a query that fails shows its SQL Server error instead of crashing.
+**A chatbox** (Streamlit) where you type a question and get the model's explanation, the SQL it wrote, and the result table. The conversation stays on screen. When a query fails, the model gets one chance to fix it ([self-repair](#self-repair)); if the fix fails too, the chatbox shows the SQL Server error instead of crashing.
 
 Messages that aren't questions about the data, like *"Hi"* or *"what's the weather?"*, get a short text reply and **no query runs**. The model first answers `is_data_question` (true or false), before it writes any SQL, and the app only runs SQL when the answer is true.
 
@@ -19,8 +19,8 @@ question ──► schema + business definitions + question ──► local LLM 
 | File | Its job |
 |---|---|
 | `app.py` | the chatbox: shows questions, answers and errors |
-| `ask.py` | `answer_question()`: question → SQL → columns and rows; runs nothing for messages that aren't data questions |
-| `llm.py` | `generate_sql()`: sends the schema, the business definitions and the question to the model, gets back `{"is_data_question", "sql", "explanation"}` as JSON |
+| `ask.py` | `answer_question()`: question → SQL → columns and rows; runs nothing for messages that aren't data questions; repairs a failed query once |
+| `llm.py` | `generate_sql()`: sends the schema, the business definitions and the question to the model, gets back `{"is_data_question", "sql", "explanation"}` as JSON; for a repair, it also sends the failed answer and the error |
 | `schema.py` | reads the tables, columns and foreign keys, and formats them as text for the model |
 | `semantic_layer.yaml` | the semantic layer: business definitions of metrics, terms and rules (see below) |
 | `semantic.py` | reads `semantic_layer.yaml` and formats it as text for the model |
@@ -140,6 +140,40 @@ model's SQL ──► ① the model's own rules ──► ② check_sql() in Pyt
    - **`MAX_ROWS = 1000`:** the app fetches at most 1,001 rows (`fetchmany`) and shows 1,000. The extra row tells it the result was cut, and the chatbox says *"Showing the first 1,000 rows."* Asking for all 60,398 internet sales lines returns in a moment instead of loading them all.
    - **`QUERY_TIMEOUT = 30`:** a query still running after 30 seconds is stopped by the driver (*"Query timeout expired"*), and the chatbox shows the error. Tested with a query that waits 40 seconds on purpose.
 
+## Self-repair
+
+When SQL Server rejects a query, the app doesn't give up straight away. It sends the model **its own failed answer plus the exact error**, and asks for a fix, **once**:
+
+```
+question ──► model writes SQL ──► check_sql + run ──► answer
+                                        │
+                                        ✗ "Invalid column name 'SalesTerritoryName'."
+                                        │
+           model gets its SQL + the error ──► writes a fix ──► check_sql + run ──► answer
+                                                                    │
+                                                                    ✗ again: show the error (no third try)
+```
+
+The model has no memory between calls, so the repair sends the whole conversation again, the way chat apps do:
+
+| Role | Message |
+|---|---|
+| `system` | the rules |
+| `user` | schema + business definitions + question |
+| `assistant` | the model's own first answer (its JSON, with the failed SQL) |
+| `user` | *"That SQL failed with this error: … Fix the query."* |
+
+The repaired SQL goes through `check_sql()` again, so a fix is held to the same safety rules. Timeouts aren't repaired: the query was valid, just slow, and a retry would make you wait again. When a repair happens, the chatbox says so under the answer, for example *"Fixed after an error: Invalid column name 'SalesTerritoryName'."*
+
+### Example
+
+**"which sales territory had the highest reseller revenue"**, before the semantic layer defined *sales territory*:
+
+1. First try: `… DimSalesTerritory.SalesTerritoryName …` → `Invalid column name 'SalesTerritoryName'.`
+2. Repair: the model read the error and the schema, and rewrote the query with a column that exists. It ran and returned the right total, **18,466,458.79**.
+
+The repaired query grouped by `SalesTerritoryAlternateKey`, a code (4), instead of the territory's name. **Self-repair fixes errors, not quality.** So a *sales territory* term now tells the model to use `SalesTerritoryRegion`, and the question is answered right on the first try: **Southwest**, 18,466,458.79. The two work together: the semantic layer prevents mistakes, and self-repair catches the ones it doesn't cover.
+
 ## Run it
 
 ### Quick start
@@ -233,7 +267,12 @@ DYLD_LIBRARY_PATH=/opt/homebrew/opt/openssl@3/lib
 
 ### Known limits
 
-The 7B model handles questions well when the semantic layer defines their words. Questions with business words the YAML file doesn't define, or with many joins, can still produce wrong SQL or a SQL Server error, and the model doesn't retry yet. Two ideas from the roadmap address this: self-repair (send the error back to the model once) and an evaluation set that measures how often answers are right.
+The 7B model handles questions well when the semantic layer defines their words, and self-repair fixes most SQL errors. The hardest problem is a query that **runs but gives a wrong answer**, because SQL Server raises no error to repair. Two examples from testing:
+
+- *"how many customers bought both a bike and a helmet"* returned **0**;
+- *"monthly internet sales in 2013 compared to 2012"* returned identical numbers in both year columns.
+
+The evaluation step on the roadmap is meant to measure how often this happens: questions with known answers, scored automatically.
 
 ## Roadmap
 
@@ -244,7 +283,7 @@ The 7B model handles questions well when the semantic layer defines their words.
 - [x] Web interface: Streamlit chatbox with conversation history
 - [x] Semantic layer: business definitions of metrics, terms and rules (`semantic_layer.yaml`)
 - [x] Safety: only SELECT statements, a read-only login, row limits and timeouts
-- [ ] Self-repair: send SQL errors back to the model once
+- [x] Self-repair: send SQL errors back to the model once
 - [ ] Evaluation: 50 test questions, scored by comparing query results; compare models
 - [ ] The app in its own container
 

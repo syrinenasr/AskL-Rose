@@ -13,6 +13,13 @@ When the question uses a business term or metric from the business definitions, 
 If the message is not a question about the data (a greeting, small talk, or something this warehouse can't answer),
 set is_data_question to false, leave sql empty, and reply briefly in the explanation with an example question."""
 
+# Sent after a query fails, together with the model's own failed answer.
+REPAIR_PROMPT = """That SQL failed with this error:
+{error}
+
+Fix the query. Use only the tables and columns listed in the schema, and the business definitions.
+Answer in the same JSON format, with the corrected SQL."""
+
 # The shape of the answer we require from the model (a JSON schema).
 ANSWER_FORMAT = {
     "type": "object",
@@ -25,14 +32,22 @@ ANSWER_FORMAT = {
 }
 
 
-def generate_sql(question, schema_text, semantic_text):
-    """Ask the local LLM to write T-SQL for a question. Returns {"is_data_question": ..., "sql": ..., "explanation": ...}."""
+def generate_sql(question, schema_text, semantic_text, failed=None):
+    """Ask the local LLM to write T-SQL for a question. Returns {"is_data_question": ..., "sql": ..., "explanation": ...}.
+
+    For a repair, failed is (previous_answer, error): the model sees its own answer and the error, and fixes the SQL.
+    """
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": f"Schema:\n{schema_text}\n\nBusiness definitions:\n{semantic_text}\n\nQuestion: {question}"},
+    ]
+    if failed:
+        previous_answer, error = failed
+        messages.append({"role": "assistant", "content": json.dumps(previous_answer)})
+        messages.append({"role": "user", "content": REPAIR_PROMPT.format(error=error)})
     response = ollama.chat(
         model=MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"Schema:\n{schema_text}\n\nBusiness definitions:\n{semantic_text}\n\nQuestion: {question}"},
-        ],
+        messages=messages,
         format=ANSWER_FORMAT,
         options={"temperature": 0},
     )

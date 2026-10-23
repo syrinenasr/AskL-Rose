@@ -74,6 +74,12 @@ terms:
     joins: FactInternetSales.CustomerKey -> DimCustomer.CustomerKey; DimCustomer.GeographyKey -> DimGeography.GeographyKey
     notes: Internet sales reach geography through the customer; FactInternetSales has no GeographyKey.
 
+  - name: sales territory
+    synonyms: [territory, sales region, sales territory region, territory group]
+    sql: DimSalesTerritory.SalesTerritoryRegion (also SalesTerritoryCountry, SalesTerritoryGroup)
+    joins: FactResellerSales.SalesTerritoryKey -> DimSalesTerritory.SalesTerritoryKey; FactInternetSales.SalesTerritoryKey -> DimSalesTerritory.SalesTerritoryKey
+    notes: Show the territory by its name, SalesTerritoryRegion (for example Southwest, Canada). There is no SalesTerritoryName column, and SalesTerritoryAlternateKey is only a code.
+
   - name: reseller country
     synonyms: [reseller country, shop country]
     sql: DimGeography.EnglishCountryRegionName

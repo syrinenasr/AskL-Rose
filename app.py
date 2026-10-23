@@ -21,9 +21,16 @@ def load_semantic_text():
     return format_semantic_layer(load_semantic_layer())
 
 
+def short_error(error):
+    """Keep only SQL Server's own message, e.g. "Invalid column name 'X'."."""
+    return error.split("[SQL Server]")[-1].strip()
+
+
 def show_answer(answer):
     """Show one answer: the explanation, then the SQL and the result table if a query ran."""
     st.write(answer["explanation"])
+    if answer.get("repaired"):
+        st.caption(f"Fixed after an error: {short_error(answer['first_error'])}")
     if answer["sql"]:
         with st.expander("SQL"):
             st.code(answer["sql"], language="sql")
@@ -66,6 +73,8 @@ if question:
             "explanation": result["explanation"],
             "table": pd.DataFrame([list(row) for row in result["rows"]], columns=result["columns"]),
             "truncated": result["truncated"],
+            "repaired": result["repaired"],
+            "first_error": result["first_error"],
         }
         show_answer(answer)
     st.session_state.messages.append({"role": "assistant", "content": answer})
