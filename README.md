@@ -243,8 +243,7 @@ The 7B model handles questions well when the semantic layer defines their words.
 - [x] Local LLM (Ollama) writes T-SQL from the schema and the question
 - [x] Web interface: Streamlit chatbox with conversation history
 - [x] Semantic layer: business definitions of metrics, terms and rules (`semantic_layer.yaml`)
-- [x] Safety: no query for messages that aren't data questions, only a single SELECT (`safety.py`), a read-only login (`askl_reader`)
-- [x] Safety, part 2: a 1,000-row limit and a 30-second query timeout
+- [x] Safety: only SELECT statements, a read-only login, row limits and timeouts
 - [ ] Self-repair: send SQL errors back to the model once
 - [ ] Evaluation: 50 test questions, scored by comparing query results; compare models
 - [ ] The app in its own container
