@@ -22,11 +22,12 @@ def load_semantic_text():
 
 
 def show_answer(answer):
-    """Show one answer: the explanation, the SQL and the result table."""
+    """Show one answer: the explanation, then the SQL and the result table if a query ran."""
     st.write(answer["explanation"])
-    with st.expander("SQL"):
-        st.code(answer["sql"], language="sql")
-    st.dataframe(answer["table"], hide_index=True)
+    if answer["sql"]:
+        with st.expander("SQL"):
+            st.code(answer["sql"], language="sql")
+        st.dataframe(answer["table"], hide_index=True)
 
 
 if "messages" not in st.session_state:

@@ -8,6 +8,8 @@ Ask a data warehouse questions in plain English. A local LLM writes the T-SQL, t
 
 **A chatbox** (Streamlit) where you type a question and get the model's explanation, the SQL it wrote, and the result table. The conversation stays on screen, and a query that fails shows its SQL Server error instead of crashing.
 
+Messages that aren't questions about the data, like *"Hi"* or *"what's the weather?"*, get a short text reply and **no query runs**. The model first answers `is_data_question` (true or false), before it writes any SQL, and the app only runs SQL when the answer is true.
+
 ```
 question ──► schema + business definitions + question ──► local LLM (Ollama) writes T-SQL ──► SQL Server runs it ──► table
 ```
@@ -15,8 +17,8 @@ question ──► schema + business definitions + question ──► local LLM 
 | File | Its job |
 |---|---|
 | `app.py` | the chatbox: shows questions, answers and errors |
-| `ask.py` | `answer_question()`: question → SQL → columns and rows |
-| `llm.py` | `generate_sql()`: sends the schema, the business definitions and the question to the model, gets back `{"sql", "explanation"}` as JSON |
+| `ask.py` | `answer_question()`: question → SQL → columns and rows; runs nothing for messages that aren't data questions |
+| `llm.py` | `generate_sql()`: sends the schema, the business definitions and the question to the model, gets back `{"is_data_question", "sql", "explanation"}` as JSON |
 | `schema.py` | reads the tables, columns and foreign keys, and formats them as text for the model |
 | `semantic_layer.yaml` | the semantic layer: business definitions of metrics, terms and rules (see below) |
 | `semantic.py` | reads `semantic_layer.yaml` and formats it as text for the model |
@@ -178,7 +180,7 @@ The 7B model handles questions well when the semantic layer defines their words.
 - [x] Local LLM (Ollama) writes T-SQL from the schema and the question
 - [x] Web interface: Streamlit chatbox with conversation history
 - [x] Semantic layer: business definitions of metrics, terms and rules (`semantic_layer.yaml`)
-- [ ] Safety: only SELECT statements, a read-only login, row limits and timeouts
+- [ ] Safety: only SELECT statements, a read-only login, row limits and timeouts (started: no query runs for messages that aren't data questions)
 - [ ] Self-repair: send SQL errors back to the model once
 - [ ] Evaluation: 50 test questions, scored by comparing query results; compare models
 - [ ] The app in its own container

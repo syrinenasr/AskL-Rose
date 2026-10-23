@@ -15,9 +15,14 @@ def run_query(query):
 
 
 def answer_question(question, schema_text, semantic_text):
-    """Turn a question into SQL, run it, and return the SQL, explanation, columns and rows."""
+    """Turn a question into SQL, run it, and return the SQL, explanation, columns and rows.
+
+    For a message that isn't a data question (like "Hi"), no query runs: sql is empty and there are no rows.
+    """
     response = generate_sql(question, schema_text, semantic_text)
-    sql = response["sql"]
+    sql = response["sql"].strip()
+    if not response["is_data_question"] or not sql:
+        return {"sql": "", "columns": [], "rows": [], "explanation": response["explanation"]}
     columns, rows = run_query(sql)
     return {
         "sql": sql,
