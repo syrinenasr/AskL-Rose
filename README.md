@@ -104,7 +104,25 @@ It used each definition: *units sold* (`SUM(OrderQuantity)`), the *product categ
 
 ## Run it
 
-Requirements: [Docker Desktop](https://www.docker.com/products/docker-desktop/), [uv](https://docs.astral.sh/uv/) and [Ollama](https://ollama.com).
+### Quick start
+
+```sh
+git clone https://github.com/syrinenasr/AskL-Rose.git && cd AskL-Rose
+cp .env.example .env                           # then set your own password in .env
+docker compose up -d                           # SQL Server + automatic restore of the database
+ollama pull qwen2.5-coder:7b                   # with Ollama running (see step 2)
+uv sync
+uv run --env-file .env streamlit run app.py    # opens http://localhost:8501
+```
+
+**Check that it works:** ask *"how many bikes were sold in 2011"*. The answer should be **2,216**. The steps below explain each command.
+
+### Requirements
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/), [uv](https://docs.astral.sh/uv/) and [Ollama](https://ollama.com). uv installs Python 3.12 by itself if needed.
+- **16 GB of RAM** recommended: SQL Server uses about 2 GB and the model about 5 GB.
+- About **10 GB of free disk** and a good connection for the first start: the SQL Server image (about 1.5 GB), the database backup and the model (4.7 GB) are downloaded once.
+- **Port 1433** must be free (stop any SQL Server already running on it), and no other Docker containers may be named `sql` or `sql_init`.
 
 ### 1. The database
 
@@ -116,6 +134,8 @@ cp .env.example .env   # then set your own password in .env
 docker compose up -d
 docker compose logs -f init   # wait for "Done."
 ```
+
+The first start takes a few minutes: Docker downloads SQL Server, then `init` downloads and restores the backup. Later starts take seconds.
 
 The password must be at least 8 characters with uppercase, lowercase, a number and a symbol, or SQL Server won't start.
 
@@ -145,11 +165,14 @@ docker compose down -v   # stop and delete the data (the next "up" restores it a
 
 ### 2. The model
 
+Ollama must be **running** before you ask the first question: open the Ollama app, or with Homebrew run `brew services start ollama` (on Linux, `ollama serve`). Then download the model once:
+
 ```sh
 ollama pull qwen2.5-coder:7b   # 4.7 GB
+curl http://localhost:11434/api/tags   # check: the list should include qwen2.5-coder:7b
 ```
 
-Ollama runs natively, not in Docker: on a Mac, Docker can't use the Apple GPU.
+Ollama runs natively, not in Docker: on a Mac, Docker can't use the Apple GPU. If the chatbox says it can't connect, Ollama isn't running.
 
 ### 3. The chatbox
 
@@ -158,7 +181,7 @@ uv sync
 uv run --env-file .env streamlit run app.py
 ```
 
-It opens at `http://localhost:8501`. Try *"number of customers per country"* or *"total internet sales per calendar year"*.
+It opens at `http://localhost:8501`. Try *"how many bikes were sold in 2011"* (the answer is 2,216), *"number of customers per country"* or *"total internet sales per calendar year"*. The first answer is slower while Ollama loads the model into memory.
 
 To test without the web page: `uv run --env-file .env python ask.py`. To see the text the model gets from the semantic layer: `uv run python semantic.py`.
 
