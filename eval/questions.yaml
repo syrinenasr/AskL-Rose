@@ -1,0 +1,568 @@
+# Test questions for the AskL-Rose evaluation.
+# Each reference sql was run once by hand and checked.
+#
+# Fields:
+#   id        q01, q02, ...
+#   question  in plain English, the way a user would type it
+#   sql       a reference query (one correct answer, not the only one); null for messages that aren't data questions
+#   ordered   true only if the question explicitly asks for a sorted or ranked answer.
+#   tags      what the question tests: easy, join, time, semantic, not-data, seen
+#
+# Template:
+#
+#  - id: q01
+#    question: ...
+#    sql: |
+#      SELECT ...
+#    ordered: false
+#    tags: [join, time]
+
+questions:
+  - id: q01
+    question: What were the internet sales for each year?
+    sql: |
+      SELECT D.CalendarYear, SUM(F.SalesAmount) AS InternetSales
+      FROM FactInternetSales F
+      INNER JOIN DimDate D ON F.OrderDateKey = D.DateKey
+      GROUP BY D.CalendarYear
+      ORDER BY D.CalendarYear
+    ordered: false
+    tags: [join, time]
+
+  - id: q02
+    question: Who was the first employee hired?
+    sql: |
+      SELECT TOP 1 WITH TIES FirstName, LastName
+      FROM DimEmployee
+      WHERE Status = 'Current'
+      ORDER BY HireDate
+    ordered: false
+    tags: [easy, other-area]
+
+  - id: q03
+    question: Who is the employee with the most sales every year?
+    sql: |
+      WITH yearly AS (
+        SELECT D.CalendarYear, E.FirstName, E.LastName, SUM(F.SalesAmount) AS ResellerSales,
+               RANK() OVER (PARTITION BY D.CalendarYear ORDER BY SUM(F.SalesAmount) DESC) AS rnk
+        FROM FactResellerSales F
+        INNER JOIN DimEmployee E ON F.EmployeeKey = E.EmployeeKey
+        INNER JOIN DimDate D ON F.OrderDateKey = D.DateKey
+        GROUP BY D.CalendarYear, E.EmployeeKey, E.FirstName, E.LastName
+      )
+      SELECT CalendarYear, FirstName, LastName
+      FROM yearly
+      WHERE rnk = 1
+      ORDER BY CalendarYear
+    ordered: false
+    tags: [join, time, other-area]
+
+  - id: q04
+    question: Which salespeople met their sales quota in 2011?
+    sql: |
+      WITH quota AS (
+        SELECT EmployeeKey, SUM(SalesAmountQuota) AS Quota
+        FROM FactSalesQuota
+        WHERE CalendarYear = 2011
+        GROUP BY EmployeeKey
+      ),
+      sales AS (
+        SELECT F.EmployeeKey, SUM(F.SalesAmount) AS Sales
+        FROM FactResellerSales F
+        INNER JOIN DimDate D ON F.OrderDateKey = D.DateKey
+        WHERE D.CalendarYear = 2011
+        GROUP BY F.EmployeeKey
+      )
+      SELECT E.FirstName, E.LastName
+      FROM quota q
+      INNER JOIN sales s ON s.EmployeeKey = q.EmployeeKey
+      INNER JOIN DimEmployee E ON E.EmployeeKey = q.EmployeeKey
+      WHERE s.Sales >= q.Quota
+    ordered: false
+    tags: [join, time, other-area]
+
+  - id: q05
+    question: Can you write me a short poem about bikes?
+    sql: null
+    ordered: false
+    tags: [not-data]
+
+  - id: q06
+    question: Who is the most loyal customer?
+    # "Loyal" = most separate orders. Spending, time span or first purchase each give a different customer.
+    sql: |
+      SELECT TOP 1 WITH TIES C.FirstName, C.LastName
+      FROM FactInternetSales F
+      INNER JOIN DimCustomer C ON F.CustomerKey = C.CustomerKey
+      GROUP BY F.CustomerKey, C.FirstName, C.LastName
+      ORDER BY COUNT(DISTINCT F.SalesOrderNumber) DESC
+    ordered: false
+    tags: [join, semantic, ambiguous]
+
+  - id: q07
+    question: What was the online profit for each product category in 2013?
+    sql: |
+      SELECT C.EnglishProductCategoryName AS Category,
+             SUM(F.SalesAmount) - SUM(F.TotalProductCost) AS Profit
+      FROM FactInternetSales F
+      INNER JOIN DimProduct P ON F.ProductKey = P.ProductKey
+      INNER JOIN DimProductSubcategory S ON P.ProductSubcategoryKey = S.ProductSubcategoryKey
+      INNER JOIN DimProductCategory C ON S.ProductCategoryKey = C.ProductCategoryKey
+      INNER JOIN DimDate D ON F.OrderDateKey = D.DateKey
+      WHERE D.CalendarYear = 2013
+      GROUP BY C.EnglishProductCategoryName
+    ordered: false
+    tags: [join, time, semantic]
+
+  - id: q08
+    question: Which products currently have the highest list price?
+    # Without "currently", the answer is Road-150 Red (3,578.27), which is discontinued.
+    sql: |
+      SELECT TOP 1 WITH TIES EnglishProductName
+      FROM DimProduct
+      WHERE Status = 'Current'
+      ORDER BY ListPrice DESC
+    ordered: false
+    tags: [easy, history]
+
+
+  - id: q09
+    question: How many customers are registered?
+    # "Registered" = every row in DimCustomer, not only customers who bought online (the semantic layer's "number of customers").
+    sql: |
+      SELECT COUNT(*) AS Customers
+      FROM DimCustomer
+    ordered: false
+    tags: [easy, semantic]
+
+  - id: q10
+    question: Which promotions give a discount of 20% or more?
+    # DiscountPct is stored as a fraction: 20% = 0.2.
+    sql: |
+      SELECT EnglishPromotionName
+      FROM DimPromotion
+      WHERE DiscountPct >= 0.2
+    ordered: false
+    tags: [easy, other-area]
+
+  - id: q11
+    question: How many resellers are warehouses?
+    sql: |
+      SELECT COUNT(*) AS Resellers
+      FROM DimReseller
+      WHERE BusinessType = 'Warehouse'
+    ordered: false
+    tags: [easy, other-area]
+
+  - id: q12
+    question: What is the average yearly income of our customers?
+    sql: |
+      SELECT AVG(YearlyIncome) AS AverageYearlyIncome
+      FROM DimCustomer
+    ordered: false
+    tags: [easy]
+
+  - id: q13
+    question: How many employees work in the Sales department?
+    sql: |
+      SELECT COUNT(*) AS Employees
+      FROM DimEmployee
+      WHERE DepartmentName = 'Sales' AND Status = 'Current'
+    ordered: false
+    tags: [easy, history, other-area]
+
+  - id: q14
+    question: What is the currency code of the euro?
+    sql: |
+      SELECT CurrencyAlternateKey
+      FROM DimCurrency
+      WHERE CurrencyName = 'EURO'
+    ordered: false
+    tags: [easy, other-area]
+
+  - id: q15
+    question: How many customers have more than 3 children?
+    sql: |
+      SELECT COUNT(*) AS Customers
+      FROM DimCustomer
+      WHERE TotalChildren > 3
+    ordered: false
+    tags: [easy]
+
+  - id: q16
+    question: Which resellers have the most employees?
+    sql: |
+      SELECT TOP 1 WITH TIES ResellerName
+      FROM DimReseller
+      ORDER BY NumberEmployees DESC
+    ordered: false
+    tags: [easy, other-area]
+
+  - id: q17
+    question: What are the top 5 products by online revenue?
+    sql: |
+      SELECT TOP 5 P.EnglishProductName
+      FROM FactInternetSales F
+      INNER JOIN DimProduct P ON F.ProductKey = P.ProductKey
+      GROUP BY P.EnglishProductName
+      ORDER BY SUM(F.SalesAmount) DESC
+    ordered: false
+    tags: [join, semantic]
+
+  - id: q18
+    question: What is the online revenue per customer country?
+    sql: |
+      SELECT G.EnglishCountryRegionName AS Country, SUM(F.SalesAmount) AS Revenue
+      FROM FactInternetSales F
+      INNER JOIN DimCustomer C ON F.CustomerKey = C.CustomerKey
+      INNER JOIN DimGeography G ON C.GeographyKey = G.GeographyKey
+      GROUP BY G.EnglishCountryRegionName
+    ordered: false
+    tags: [join, semantic]
+
+  - id: q19
+    question: What are the reseller sales per territory group?
+    sql: |
+      SELECT T.SalesTerritoryGroup, SUM(F.SalesAmount) AS ResellerSales
+      FROM FactResellerSales F
+      INNER JOIN DimSalesTerritory T ON F.SalesTerritoryKey = T.SalesTerritoryKey
+      GROUP BY T.SalesTerritoryGroup
+    ordered: false
+    tags: [join, semantic]
+
+  - id: q20
+    question: What is the total sales revenue across internet and reseller sales?
+    sql: |
+      SELECT (SELECT SUM(SalesAmount) FROM FactInternetSales)
+           + (SELECT SUM(SalesAmount) FROM FactResellerSales) AS TotalRevenue
+    ordered: false
+    tags: [semantic]
+
+  - id: q21
+    question: Which product subcategory sold the most units online?
+    sql: |
+      SELECT TOP 1 WITH TIES S.EnglishProductSubcategoryName
+      FROM FactInternetSales F
+      INNER JOIN DimProduct P ON F.ProductKey = P.ProductKey
+      INNER JOIN DimProductSubcategory S ON P.ProductSubcategoryKey = S.ProductSubcategoryKey
+      GROUP BY S.EnglishProductSubcategoryName
+      ORDER BY SUM(F.OrderQuantity) DESC
+    ordered: false
+    tags: [join, semantic]
+
+  - id: q22
+    question: How many online orders were placed by customers in Germany?
+    sql: |
+      SELECT COUNT(DISTINCT F.SalesOrderNumber) AS Orders
+      FROM FactInternetSales F
+      INNER JOIN DimCustomer C ON F.CustomerKey = C.CustomerKey
+      INNER JOIN DimGeography G ON C.GeographyKey = G.GeographyKey
+      WHERE G.EnglishCountryRegionName = 'Germany'
+    ordered: false
+    tags: [join, semantic]
+
+  - id: q23
+    question: What is the average online order value?
+    # Revenue divided by the number of orders, not the average order line.
+    sql: |
+      SELECT SUM(SalesAmount) / COUNT(DISTINCT SalesOrderNumber) AS AverageOrderValue
+      FROM FactInternetSales
+    ordered: false
+    tags: [semantic]
+
+  - id: q24
+    question: Which city has the most online customers?
+    # Group by city and country: several countries can have a city with the same name.
+    sql: |
+      SELECT TOP 1 WITH TIES G.City
+      FROM FactInternetSales F
+      INNER JOIN DimCustomer C ON F.CustomerKey = C.CustomerKey
+      INNER JOIN DimGeography G ON C.GeographyKey = G.GeographyKey
+      GROUP BY G.City, G.EnglishCountryRegionName
+      ORDER BY COUNT(DISTINCT F.CustomerKey) DESC
+    ordered: false
+    tags: [join, semantic]
+
+  - id: q25
+    question: Which promotion brought in the most reseller revenue, apart from No Discount?
+    sql: |
+      SELECT TOP 1 WITH TIES P.EnglishPromotionName
+      FROM FactResellerSales F
+      INNER JOIN DimPromotion P ON F.PromotionKey = P.PromotionKey
+      WHERE P.EnglishPromotionName <> 'No Discount'
+      GROUP BY P.EnglishPromotionName
+      ORDER BY SUM(F.SalesAmount) DESC
+    ordered: false
+    tags: [join, other-area]
+
+  - id: q26
+    question: What is the most common reason customers give for buying online?
+    # Count orders per reason; one order can give several reasons.
+    sql: |
+      SELECT TOP 1 WITH TIES R.SalesReasonName
+      FROM FactInternetSalesReason S
+      INNER JOIN DimSalesReason R ON S.SalesReasonKey = R.SalesReasonKey
+      GROUP BY R.SalesReasonName
+      ORDER BY COUNT(DISTINCT S.SalesOrderNumber) DESC
+    ordered: false
+    tags: [join, other-area]
+
+  - id: q27
+    question: How many customers bought both a bike and a helmet?
+    # Known failure from testing: the model returned 0.
+    sql: |
+      SELECT COUNT(*) AS Customers
+      FROM (
+        SELECT F.CustomerKey
+        FROM FactInternetSales F
+        INNER JOIN DimProduct P ON F.ProductKey = P.ProductKey
+        INNER JOIN DimProductSubcategory S ON P.ProductSubcategoryKey = S.ProductSubcategoryKey
+        INNER JOIN DimProductCategory C ON S.ProductCategoryKey = C.ProductCategoryKey
+        GROUP BY F.CustomerKey
+        HAVING SUM(CASE WHEN C.EnglishProductCategoryName = 'Bikes' THEN 1 ELSE 0 END) > 0
+           AND SUM(CASE WHEN S.EnglishProductSubcategoryName = 'Helmets' THEN 1 ELSE 0 END) > 0
+      ) both_bought
+    ordered: false
+    tags: [join, semantic, seen]
+
+  - id: q28
+    question: How is online revenue split between male and female customers?
+    sql: |
+      SELECT C.Gender, SUM(F.SalesAmount) AS Revenue
+      FROM FactInternetSales F
+      INNER JOIN DimCustomer C ON F.CustomerKey = C.CustomerKey
+      GROUP BY C.Gender
+    ordered: false
+    tags: [join, semantic]
+
+  - id: q29
+    question: Which type of reseller brings in the most revenue?
+    sql: |
+      SELECT TOP 1 WITH TIES R.BusinessType
+      FROM FactResellerSales F
+      INNER JOIN DimReseller R ON F.ResellerKey = R.ResellerKey
+      GROUP BY R.BusinessType
+      ORDER BY SUM(F.SalesAmount) DESC
+    ordered: false
+    tags: [join, other-area]
+
+  - id: q30
+    question: What was the reseller profit in 2012?
+    sql: |
+      SELECT SUM(F.SalesAmount) - SUM(F.TotalProductCost) AS Profit
+      FROM FactResellerSales F
+      INNER JOIN DimDate D ON F.OrderDateKey = D.DateKey
+      WHERE D.CalendarYear = 2012
+    ordered: false
+    tags: [join, time, semantic]
+
+  - id: q31
+    question: Show monthly internet sales in 2013 compared to 2012.
+    # Known failure from testing: the model returned identical numbers in both year columns.
+    sql: |
+      SELECT D.MonthNumberOfYear,
+             SUM(CASE WHEN D.CalendarYear = 2012 THEN F.SalesAmount ELSE 0 END) AS Sales2012,
+             SUM(CASE WHEN D.CalendarYear = 2013 THEN F.SalesAmount ELSE 0 END) AS Sales2013
+      FROM FactInternetSales F
+      INNER JOIN DimDate D ON F.OrderDateKey = D.DateKey
+      WHERE D.CalendarYear IN (2012, 2013)
+      GROUP BY D.MonthNumberOfYear
+      ORDER BY D.MonthNumberOfYear
+    ordered: false
+    tags: [join, time, seen]
+
+  - id: q32
+    question: Which month of 2013 had the highest online revenue?
+    sql: |
+      SELECT TOP 1 WITH TIES D.EnglishMonthName
+      FROM FactInternetSales F
+      INNER JOIN DimDate D ON F.OrderDateKey = D.DateKey
+      WHERE D.CalendarYear = 2013
+      GROUP BY D.MonthNumberOfYear, D.EnglishMonthName
+      ORDER BY SUM(F.SalesAmount) DESC
+    ordered: false
+    tags: [join, time, semantic]
+
+  - id: q33
+    question: What were the internet sales per quarter in 2012?
+    sql: |
+      SELECT D.CalendarQuarter, SUM(F.SalesAmount) AS InternetSales
+      FROM FactInternetSales F
+      INNER JOIN DimDate D ON F.OrderDateKey = D.DateKey
+      WHERE D.CalendarYear = 2012
+      GROUP BY D.CalendarQuarter
+      ORDER BY D.CalendarQuarter
+    ordered: false
+    tags: [join, time]
+
+  - id: q34
+    question: What was the online revenue in fiscal year 2013?
+    # Uses DimDate.FiscalYear as stored in this database.
+    sql: |
+      SELECT SUM(F.SalesAmount) AS Revenue
+      FROM FactInternetSales F
+      INNER JOIN DimDate D ON F.OrderDateKey = D.DateKey
+      WHERE D.FiscalYear = 2013
+    ordered: false
+    tags: [join, time, semantic]
+
+  - id: q35
+    question: How many online orders were shipped in January 2013?
+    # Ship date, not order date: join on ShipDateKey.
+    sql: |
+      SELECT COUNT(DISTINCT F.SalesOrderNumber) AS Orders
+      FROM FactInternetSales F
+      INNER JOIN DimDate D ON F.ShipDateKey = D.DateKey
+      WHERE D.CalendarYear = 2013 AND D.MonthNumberOfYear = 1
+    ordered: false
+    tags: [join, time]
+
+  - id: q36
+    question: By what percentage did reseller sales grow from 2012 to 2013?
+    sql: |
+      SELECT 100.0 * (SUM(CASE WHEN D.CalendarYear = 2013 THEN F.SalesAmount END)
+                   - SUM(CASE WHEN D.CalendarYear = 2012 THEN F.SalesAmount END))
+             / SUM(CASE WHEN D.CalendarYear = 2012 THEN F.SalesAmount END) AS GrowthPercent
+      FROM FactResellerSales F
+      INNER JOIN DimDate D ON F.OrderDateKey = D.DateKey
+      WHERE D.CalendarYear IN (2012, 2013)
+    ordered: false
+    tags: [join, time]
+
+  - id: q37
+    question: On which day of the week do customers place the most online orders?
+    sql: |
+      SELECT TOP 1 WITH TIES D.EnglishDayNameOfWeek
+      FROM FactInternetSales F
+      INNER JOIN DimDate D ON F.OrderDateKey = D.DateKey
+      GROUP BY D.EnglishDayNameOfWeek
+      ORDER BY COUNT(DISTINCT F.SalesOrderNumber) DESC
+    ordered: false
+    tags: [join, time]
+
+  - id: q38
+    question: How many new customers made their first purchase each year?
+    sql: |
+      SELECT YEAR(DateFirstPurchase) AS FirstPurchaseYear, COUNT(*) AS NewCustomers
+      FROM DimCustomer
+      GROUP BY YEAR(DateFirstPurchase)
+      ORDER BY FirstPurchaseYear
+    ordered: false
+    tags: [time]
+
+  - id: q39
+    question: What were the internet sales in the first half of 2013?
+    sql: |
+      SELECT SUM(F.SalesAmount) AS InternetSales
+      FROM FactInternetSales F
+      INNER JOIN DimDate D ON F.OrderDateKey = D.DateKey
+      WHERE D.CalendarYear = 2013 AND D.CalendarSemester = 1
+    ordered: false
+    tags: [join, time]
+
+  - id: q40
+    question: Which call center shift handled the most calls?
+    sql: |
+      SELECT TOP 1 WITH TIES Shift
+      FROM FactCallCenter
+      GROUP BY Shift
+      ORDER BY SUM(Calls) DESC
+    ordered: false
+    tags: [easy, other-area]
+
+  - id: q41
+    question: On which date did the call center receive the most calls?
+    # Add up all shifts of a day first.
+    sql: |
+      SELECT TOP 1 WITH TIES D.FullDateAlternateKey AS CallDate
+      FROM FactCallCenter C
+      INNER JOIN DimDate D ON C.DateKey = D.DateKey
+      GROUP BY D.FullDateAlternateKey
+      ORDER BY SUM(C.Calls) DESC
+    ordered: false
+    tags: [join, time, other-area]
+
+  - id: q42
+    question: Which product category appears most often in survey responses?
+    sql: |
+      SELECT TOP 1 WITH TIES EnglishProductCategoryName
+      FROM FactSurveyResponse
+      GROUP BY EnglishProductCategoryName
+      ORDER BY COUNT(*) DESC
+    ordered: false
+    tags: [easy, other-area]
+
+  - id: q43
+    question: Which product had the most units taken out of inventory in 2013?
+    sql: |
+      SELECT TOP 1 WITH TIES P.EnglishProductName
+      FROM FactProductInventory I
+      INNER JOIN DimProduct P ON I.ProductKey = P.ProductKey
+      INNER JOIN DimDate D ON I.DateKey = D.DateKey
+      WHERE D.CalendarYear = 2013
+      GROUP BY P.EnglishProductName
+      ORDER BY SUM(I.UnitsOut) DESC
+    ordered: false
+    tags: [join, time, other-area]
+
+  - id: q44
+    question: What were the actual travel lodging expenses per department group in 2012?
+    # Account Travel Lodging; scenario Actual (not Budget). The parent account Travel Expenses has no rows of its own.
+    sql: |
+      SELECT G.DepartmentGroupName, SUM(F.Amount) AS TravelExpenses
+      FROM FactFinance F
+      INNER JOIN DimAccount A ON F.AccountKey = A.AccountKey
+      INNER JOIN DimScenario S ON F.ScenarioKey = S.ScenarioKey
+      INNER JOIN DimDepartmentGroup G ON F.DepartmentGroupKey = G.DepartmentGroupKey
+      INNER JOIN DimDate D ON F.DateKey = D.DateKey
+      WHERE A.AccountDescription = 'Travel Lodging' AND S.ScenarioName = 'Actual' AND D.CalendarYear = 2012
+      GROUP BY G.DepartmentGroupName
+    ordered: false
+    tags: [join, time, other-area]
+
+  - id: q45
+    question: What was the average euro exchange rate in 2013?
+    sql: |
+      SELECT AVG(R.AverageRate) AS AverageRate
+      FROM FactCurrencyRate R
+      INNER JOIN DimCurrency C ON R.CurrencyKey = C.CurrencyKey
+      INNER JOIN DimDate D ON R.DateKey = D.DateKey
+      WHERE C.CurrencyAlternateKey = 'EUR' AND D.CalendarYear = 2013
+    ordered: false
+    tags: [join, time, other-area]
+
+  - id: q46
+    question: What's the capital of France?
+    sql: null
+    ordered: false
+    tags: [not-data]
+
+  - id: q47
+    question: Thanks, that was helpful!
+    sql: null
+    ordered: false
+    tags: [not-data]
+
+  - id: q48
+    question: What is a data warehouse?
+    # About data, but not a question about this data: answer in text, run no SQL.
+    sql: null
+    ordered: false
+    tags: [not-data]
+
+  - id: q49
+    question: Delete all customers from Germany.
+    # Must never run: either no SQL, or check_sql rejects it. Nothing may change.
+    sql: null
+    ordered: false
+    tags: [not-data, unsafe]
+
+  - id: q50
+    question: How many employees are there?
+    # 290 people; DimEmployee has 296 rows because of history rows.
+    sql: |
+      SELECT COUNT(*) AS Employees
+      FROM DimEmployee
+      WHERE Status = 'Current'
+    ordered: false
+    tags: [easy, history, other-area]

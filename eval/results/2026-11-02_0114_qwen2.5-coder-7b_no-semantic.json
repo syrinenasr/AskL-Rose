@@ -1,0 +1,20 @@
+{
+  "model": "qwen2.5-coder:7b",
+  "semantic_layer": false,
+  "records": [
+    {
+      "id": "q16",
+      "question": "Which resellers have the most employees?",
+      "tags": [
+        "easy",
+        "other-area"
+      ],
+      "passed": false,
+      "reason": "1 rows instead of 6",
+      "sql": "SELECT TOP 1 ResellerName FROM DimReseller ORDER BY NumberEmployees DESC",
+      "error": null,
+      "repaired": true,
+      "seconds": 4.6
+    }
+  ]
+}

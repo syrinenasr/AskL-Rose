@@ -1,0 +1,712 @@
+{
+  "model": "qwen2.5-coder:7b",
+  "semantic_layer": false,
+  "records": [
+    {
+      "id": "q01",
+      "question": "What were the internet sales for each year?",
+      "tags": [
+        "join",
+        "time"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "SELECT DimDate.CalendarYear, SUM(FactInternetSales.SalesAmount) AS TotalInternetSales FROM FactInternetSales INNER JOIN DimDate ON FactInternetSales.OrderDateKey = DimDate.DateKey GROUP BY DimDate.CalendarYear;",
+      "error": null,
+      "repaired": false,
+      "seconds": 19.8
+    },
+    {
+      "id": "q02",
+      "question": "Who was the first employee hired?",
+      "tags": [
+        "easy",
+        "other-area"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "SELECT TOP 1 FirstName, LastName FROM DimEmployee ORDER BY HireDate ASC",
+      "error": null,
+      "repaired": true,
+      "seconds": 8.9
+    },
+    {
+      "id": "q03",
+      "question": "Who is the employee with the most sales every year?",
+      "tags": [
+        "join",
+        "time",
+        "other-area"
+      ],
+      "passed": false,
+      "reason": "1 rows instead of 4",
+      "sql": "SELECT TOP 1 e.FirstName, e.LastName, MAX(f.SalesAmountQuota) AS TotalSales FROM DimEmployee e JOIN FactSalesQuota f ON e.EmployeeKey = f.EmployeeKey GROUP BY e.EmployeeKey, e.FirstName, e.LastName ORDER BY TotalSales DESC;",
+      "error": null,
+      "repaired": true,
+      "seconds": 12.7
+    },
+    {
+      "id": "q04",
+      "question": "Which salespeople met their sales quota in 2011?",
+      "tags": [
+        "join",
+        "time",
+        "other-area"
+      ],
+      "passed": false,
+      "reason": "error: Driver Error: Column not found; DDBC Error: [Microsoft][SQL Server]Invalid column name 'SalesAmount'.",
+      "sql": null,
+      "error": "Driver Error: Column not found; DDBC Error: [Microsoft][SQL Server]Invalid column name 'SalesAmount'.",
+      "repaired": false,
+      "seconds": 7.6
+    },
+    {
+      "id": "q05",
+      "question": "Can you write me a short poem about bikes?",
+      "tags": [
+        "not-data"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "",
+      "error": null,
+      "repaired": false,
+      "seconds": 3.2
+    },
+    {
+      "id": "q06",
+      "question": "Who is the most loyal customer?",
+      "tags": [
+        "join",
+        "semantic",
+        "ambiguous"
+      ],
+      "passed": false,
+      "reason": "1 rows instead of 2",
+      "sql": "SELECT TOP 1 c.CustomerKey, c.FirstName, c.LastName, COUNT(s.SalesOrderNumber) AS OrderCount FROM DimCustomer c JOIN FactInternetSales s ON c.CustomerKey = s.CustomerKey GROUP BY c.CustomerKey, c.FirstName, c.LastName ORDER BY OrderCount DESC;",
+      "error": null,
+      "repaired": true,
+      "seconds": 9.9
+    },
+    {
+      "id": "q07",
+      "question": "What was the online profit for each product category in 2013?",
+      "tags": [
+        "join",
+        "time",
+        "semantic"
+      ],
+      "passed": false,
+      "reason": "no column matches reference column 2",
+      "sql": "SELECT pc.EnglishProductCategoryName, SUM(fis.SalesAmount - fis.TaxAmt - fis.DiscountAmount) AS OnlineProfit FROM FactInternetSales fis JOIN DimProduct p ON fis.ProductKey = p.ProductKey JOIN DimProductSubcategory psc ON p.ProductSubcategoryKey = psc.ProductSubcategoryKey JOIN DimProductCategory pc ON psc.ProductCategoryKey = pc.ProductCategoryKey JOIN DimDate dd ON fis.OrderDateKey = dd.DateKey WHERE dd.CalendarYear = 2013 GROUP BY pc.EnglishProductCategoryName",
+      "error": null,
+      "repaired": true,
+      "seconds": 18.3
+    },
+    {
+      "id": "q08",
+      "question": "Which products currently have the highest list price?",
+      "tags": [
+        "easy",
+        "history"
+      ],
+      "passed": false,
+      "reason": "no column matches reference column 1",
+      "sql": "SELECT EnglishProductName FROM DimProduct WHERE ListPrice = (SELECT MAX(ListPrice) FROM DimProduct)",
+      "error": null,
+      "repaired": false,
+      "seconds": 2.2
+    },
+    {
+      "id": "q09",
+      "question": "How many customers are registered?",
+      "tags": [
+        "easy",
+        "semantic"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "SELECT COUNT(CustomerKey) AS NumberOfCustomers FROM DimCustomer;",
+      "error": null,
+      "repaired": false,
+      "seconds": 2.5
+    },
+    {
+      "id": "q10",
+      "question": "Which promotions give a discount of 20% or more?",
+      "tags": [
+        "easy",
+        "other-area"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "SELECT EnglishPromotionName FROM DimPromotion WHERE DiscountPct >= 0.20;",
+      "error": null,
+      "repaired": false,
+      "seconds": 2.4
+    },
+    {
+      "id": "q11",
+      "question": "How many resellers are warehouses?",
+      "tags": [
+        "easy",
+        "other-area"
+      ],
+      "passed": false,
+      "reason": "treated as not a data question",
+      "sql": "",
+      "error": null,
+      "repaired": false,
+      "seconds": 1.2
+    },
+    {
+      "id": "q12",
+      "question": "What is the average yearly income of our customers?",
+      "tags": [
+        "easy"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "SELECT AVG(YearlyIncome) AS AverageYearlyIncome FROM DimCustomer;",
+      "error": null,
+      "repaired": false,
+      "seconds": 2.9
+    },
+    {
+      "id": "q13",
+      "question": "How many employees work in the Sales department?",
+      "tags": [
+        "easy",
+        "history",
+        "other-area"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "SELECT COUNT(EmployeeKey) FROM DimEmployee WHERE DepartmentName = 'Sales'",
+      "error": null,
+      "repaired": false,
+      "seconds": 1.9
+    },
+    {
+      "id": "q14",
+      "question": "What is the currency code of the euro?",
+      "tags": [
+        "easy",
+        "other-area"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "SELECT CurrencyAlternateKey FROM DimCurrency WHERE CurrencyName = 'Euro'",
+      "error": null,
+      "repaired": false,
+      "seconds": 1.9
+    },
+    {
+      "id": "q15",
+      "question": "How many customers have more than 3 children?",
+      "tags": [
+        "easy"
+      ],
+      "passed": false,
+      "reason": "no column matches reference column 1",
+      "sql": "SELECT COUNT(CustomerKey) FROM DimCustomer WHERE NumberChildrenAtHome > 3",
+      "error": null,
+      "repaired": false,
+      "seconds": 2.1
+    },
+    {
+      "id": "q16",
+      "question": "Which reseller has the most employees?",
+      "tags": [
+        "easy",
+        "other-area"
+      ],
+      "passed": false,
+      "reason": "1 rows instead of 6",
+      "sql": "SELECT TOP 1 ResellerName FROM DimReseller ORDER BY NumberEmployees DESC",
+      "error": null,
+      "repaired": true,
+      "seconds": 4.3
+    },
+    {
+      "id": "q17",
+      "question": "What are the top 5 products by online revenue?",
+      "tags": [
+        "join",
+        "semantic"
+      ],
+      "passed": false,
+      "reason": "no column matches reference column 1",
+      "sql": "SELECT TOP 5 DimProduct.ProductKey, DimProduct.EnglishProductName, SUM(FactInternetSales.SalesAmount) AS TotalOnlineRevenue FROM DimProduct INNER JOIN FactInternetSales ON DimProduct.ProductKey = FactInternetSales.ProductKey GROUP BY DimProduct.ProductKey, DimProduct.EnglishProductName ORDER BY TotalOnlineRevenue DESC;",
+      "error": null,
+      "repaired": false,
+      "seconds": 4.1
+    },
+    {
+      "id": "q18",
+      "question": "What is the online revenue per customer country?",
+      "tags": [
+        "join",
+        "semantic"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "SELECT DimGeography.EnglishCountryRegionName, SUM(FactInternetSales.SalesAmount) AS OnlineRevenue FROM FactInternetSales INNER JOIN DimCustomer ON FactInternetSales.CustomerKey = DimCustomer.CustomerKey INNER JOIN DimGeography ON DimCustomer.GeographyKey = DimGeography.GeographyKey GROUP BY DimGeography.EnglishCountryRegionName",
+      "error": null,
+      "repaired": false,
+      "seconds": 5.1
+    },
+    {
+      "id": "q19",
+      "question": "What are the reseller sales per territory group?",
+      "tags": [
+        "join",
+        "semantic"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "SELECT T2.SalesTerritoryGroup, SUM(T1.SalesAmount) AS TotalSales FROM FactResellerSales AS T1 INNER JOIN DimSalesTerritory AS T2 ON T1.SalesTerritoryKey = T2.SalesTerritoryKey GROUP BY T2.SalesTerritoryGroup",
+      "error": null,
+      "repaired": false,
+      "seconds": 5.2
+    },
+    {
+      "id": "q20",
+      "question": "What is the total sales revenue across internet and reseller sales?",
+      "tags": [
+        "semantic"
+      ],
+      "passed": false,
+      "reason": "2 rows instead of 1",
+      "sql": "SELECT SUM(SalesAmount) AS TotalSalesRevenue FROM FactInternetSales UNION ALL SELECT SUM(SalesAmount) AS TotalSalesRevenue FROM FactResellerSales",
+      "error": null,
+      "repaired": false,
+      "seconds": 3.7
+    },
+    {
+      "id": "q21",
+      "question": "Which product subcategory sold the most units online?",
+      "tags": [
+        "join",
+        "semantic"
+      ],
+      "passed": false,
+      "reason": "error: Driver Error: Column not found; DDBC Error: [Microsoft][SQL Server]Invalid column name 'EnglishProductSubcategoryName'.",
+      "sql": null,
+      "error": "Driver Error: Column not found; DDBC Error: [Microsoft][SQL Server]Invalid column name 'EnglishProductSubcategoryName'.",
+      "repaired": false,
+      "seconds": 8.7
+    },
+    {
+      "id": "q22",
+      "question": "How many online orders were placed by customers in Germany?",
+      "tags": [
+        "join",
+        "semantic"
+      ],
+      "passed": false,
+      "reason": "no column matches reference column 1",
+      "sql": "SELECT COUNT(*) FROM FactInternetSales AS fis JOIN DimCustomer AS dc ON fis.CustomerKey = dc.CustomerKey JOIN DimGeography AS dg ON dc.GeographyKey = dg.GeographyKey WHERE dg.CountryRegionCode = 'Germany';",
+      "error": null,
+      "repaired": false,
+      "seconds": 4.7
+    },
+    {
+      "id": "q23",
+      "question": "What is the average online order value?",
+      "tags": [
+        "semantic"
+      ],
+      "passed": false,
+      "reason": "no column matches reference column 1",
+      "sql": "SELECT AVG(SalesAmount) AS AverageOnlineOrderValue FROM FactInternetSales;",
+      "error": null,
+      "repaired": false,
+      "seconds": 2.7
+    },
+    {
+      "id": "q24",
+      "question": "Which city has the most online customers?",
+      "tags": [
+        "join",
+        "semantic"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "SELECT TOP 1 g.City FROM DimCustomer c JOIN DimGeography g ON c.GeographyKey = g.GeographyKey GROUP BY g.City ORDER BY COUNT(c.CustomerKey) DESC;",
+      "error": null,
+      "repaired": false,
+      "seconds": 2.8
+    },
+    {
+      "id": "q25",
+      "question": "Which promotion brought in the most reseller revenue, apart from No Discount?",
+      "tags": [
+        "join",
+        "other-area"
+      ],
+      "passed": false,
+      "reason": "error: Driver Error: Invalid character value for cast specification; DDBC Error: [Microsoft][SQL Server]Conversion failed when converting the varchar value 'No Discount' to data type int.",
+      "sql": null,
+      "error": "Driver Error: Invalid character value for cast specification; DDBC Error: [Microsoft][SQL Server]Conversion failed when converting the varchar value 'No Discount' to data type int.",
+      "repaired": false,
+      "seconds": 9.5
+    },
+    {
+      "id": "q26",
+      "question": "What is the most common reason customers give for buying online?",
+      "tags": [
+        "join",
+        "other-area"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "SELECT TOP 1 SalesReasonName FROM DimSalesReason AS T1 INNER JOIN FactInternetSalesReason AS T2 ON T1.SalesReasonKey = T2.SalesReasonKey GROUP BY SalesReasonName ORDER BY COUNT(*) DESC;",
+      "error": null,
+      "repaired": false,
+      "seconds": 6.5
+    },
+    {
+      "id": "q27",
+      "question": "How many customers bought both a bike and a helmet?",
+      "tags": [
+        "join",
+        "semantic",
+        "seen"
+      ],
+      "passed": false,
+      "reason": "no column matches reference column 1",
+      "sql": "SELECT COUNT(DISTINCT c.CustomerKey) FROM DimCustomer c JOIN FactInternetSales i ON c.CustomerKey = i.CustomerKey WHERE i.ProductKey IN ( SELECT ProductKey FROM DimProduct WHERE EnglishProductName IN ('Bike', 'Helmet') )",
+      "error": null,
+      "repaired": false,
+      "seconds": 6.1
+    },
+    {
+      "id": "q28",
+      "question": "How is online revenue split between male and female customers?",
+      "tags": [
+        "join",
+        "semantic"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "SELECT Gender, SUM(SalesAmount) AS TotalOnlineRevenue FROM DimCustomer JOIN FactInternetSales ON DimCustomer.CustomerKey = FactInternetSales.CustomerKey GROUP BY Gender;",
+      "error": null,
+      "repaired": false,
+      "seconds": 4.1
+    },
+    {
+      "id": "q29",
+      "question": "Which type of reseller brings in the most revenue?",
+      "tags": [
+        "join",
+        "other-area"
+      ],
+      "passed": false,
+      "reason": "error: Driver Error: Syntax error or access violation; DDBC Error: [Microsoft][SQL Server]Invalid usage of the option FIRST in the FETCH statement.",
+      "sql": null,
+      "error": "Driver Error: Syntax error or access violation; DDBC Error: [Microsoft][SQL Server]Invalid usage of the option FIRST in the FETCH statement.",
+      "repaired": false,
+      "seconds": 8.5
+    },
+    {
+      "id": "q30",
+      "question": "What was the reseller profit in 2012?",
+      "tags": [
+        "join",
+        "time",
+        "semantic"
+      ],
+      "passed": false,
+      "reason": "no column matches reference column 1",
+      "sql": "SELECT SUM(SalesAmount - ProductStandardCost) AS ResellerProfit FROM FactResellerSales WHERE YEAR(OrderDate) = 2012;",
+      "error": null,
+      "repaired": false,
+      "seconds": 4.0
+    },
+    {
+      "id": "q31",
+      "question": "Show monthly internet sales in 2013 compared to 2012.",
+      "tags": [
+        "join",
+        "time",
+        "seen"
+      ],
+      "passed": false,
+      "reason": "no column matches reference column 2",
+      "sql": "SELECT DimDate.MonthNumberOfYear, SUM(FactInternetSales.SalesAmount) AS SalesAmount2012, SUM(FactInternetSales.SalesAmount) AS SalesAmount2013 FROM FactInternetSales INNER JOIN DimDate ON FactInternetSales.OrderDateKey = DimDate.DateKey WHERE DimDate.CalendarYear IN (2012, 2013) GROUP BY DimDate.MonthNumberOfYear ORDER BY DimDate.MonthNumberOfYear;",
+      "error": null,
+      "repaired": false,
+      "seconds": 5.9
+    },
+    {
+      "id": "q32",
+      "question": "Which month of 2013 had the highest online revenue?",
+      "tags": [
+        "join",
+        "time",
+        "semantic"
+      ],
+      "passed": false,
+      "reason": "error: Driver Error: Syntax error or access violation; DDBC Error: [Microsoft][SQL Server]Invalid usage of the option FIRST in the FETCH statement.",
+      "sql": null,
+      "error": "Driver Error: Syntax error or access violation; DDBC Error: [Microsoft][SQL Server]Invalid usage of the option FIRST in the FETCH statement.",
+      "repaired": false,
+      "seconds": 9.9
+    },
+    {
+      "id": "q33",
+      "question": "What were the internet sales per quarter in 2012?",
+      "tags": [
+        "join",
+        "time"
+      ],
+      "passed": false,
+      "reason": "error: Driver Error: Column not found; DDBC Error: [Microsoft][SQL Server]Invalid column name 'DateKey'.",
+      "sql": null,
+      "error": "Driver Error: Column not found; DDBC Error: [Microsoft][SQL Server]Invalid column name 'DateKey'.",
+      "repaired": false,
+      "seconds": 27.5
+    },
+    {
+      "id": "q34",
+      "question": "What was the online revenue in fiscal year 2013?",
+      "tags": [
+        "join",
+        "time",
+        "semantic"
+      ],
+      "passed": false,
+      "reason": "error: Driver Error: Syntax error or access violation; DDBC Error: [Microsoft][SQL Server]'FiscalYear' is not a recognized datepart option.",
+      "sql": null,
+      "error": "Driver Error: Syntax error or access violation; DDBC Error: [Microsoft][SQL Server]'FiscalYear' is not a recognized datepart option.",
+      "repaired": false,
+      "seconds": 8.9
+    },
+    {
+      "id": "q35",
+      "question": "How many online orders were shipped in January 2013?",
+      "tags": [
+        "join",
+        "time"
+      ],
+      "passed": false,
+      "reason": "no column matches reference column 1",
+      "sql": "SELECT COUNT(*) FROM FactInternetSales AS fis JOIN DimDate AS dd ON fis.ShipDateKey = dd.DateKey WHERE dd.CalendarYear = 2013 AND dd.MonthNumberOfYear = 1;",
+      "error": null,
+      "repaired": true,
+      "seconds": 11.0
+    },
+    {
+      "id": "q36",
+      "question": "By what percentage did reseller sales grow from 2012 to 2013?",
+      "tags": [
+        "join",
+        "time"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "SELECT ((SUM(CASE WHEN YEAR(FactResellerSales.OrderDate) = 2013 THEN FactResellerSales.SalesAmount ELSE 0 END) - SUM(CASE WHEN YEAR(FactResellerSales.OrderDate) = 2012 THEN FactResellerSales.SalesAmount ELSE 0 END)) / SUM(CASE WHEN YEAR(FactResellerSales.OrderDate) = 2012 THEN FactResellerSales.SalesAmount ELSE 0 END)) * 100 AS SalesGrowthPercentage FROM FactResellerSales",
+      "error": null,
+      "repaired": false,
+      "seconds": 7.5
+    },
+    {
+      "id": "q37",
+      "question": "On which day of the week do customers place the most online orders?",
+      "tags": [
+        "join",
+        "time"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "SELECT TOP 1 d.EnglishDayNameOfWeek FROM FactInternetSales i JOIN DimDate d ON i.OrderDateKey = d.DateKey GROUP BY d.EnglishDayNameOfWeek ORDER BY COUNT(i.SalesOrderNumber) DESC;",
+      "error": null,
+      "repaired": true,
+      "seconds": 13.0
+    },
+    {
+      "id": "q38",
+      "question": "How many new customers made their first purchase each year?",
+      "tags": [
+        "time"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "SELECT YEAR(DateFirstPurchase) AS Year, COUNT(CustomerKey) AS NewCustomers FROM DimCustomer WHERE DateFirstPurchase IS NOT NULL GROUP BY YEAR(DateFirstPurchase);",
+      "error": null,
+      "repaired": false,
+      "seconds": 3.1
+    },
+    {
+      "id": "q39",
+      "question": "What were the internet sales in the first half of 2013?",
+      "tags": [
+        "join",
+        "time"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "SELECT SUM(SalesAmount) AS TotalInternetSales FROM FactInternetSales WHERE OrderDate BETWEEN '2013-01-01' AND '2013-06-30';",
+      "error": null,
+      "repaired": true,
+      "seconds": 7.3
+    },
+    {
+      "id": "q40",
+      "question": "Which call center shift handled the most calls?",
+      "tags": [
+        "easy",
+        "other-area"
+      ],
+      "passed": false,
+      "reason": "error: Driver Error: Syntax error or access violation; DDBC Error: [Microsoft][SQL Server]Invalid usage of the option FIRST in the FETCH statement.",
+      "sql": null,
+      "error": "Driver Error: Syntax error or access violation; DDBC Error: [Microsoft][SQL Server]Invalid usage of the option FIRST in the FETCH statement.",
+      "repaired": false,
+      "seconds": 4.9
+    },
+    {
+      "id": "q41",
+      "question": "On which date did the call center receive the most calls?",
+      "tags": [
+        "join",
+        "time",
+        "other-area"
+      ],
+      "passed": false,
+      "reason": "no column matches reference column 1",
+      "sql": "SELECT TOP 1 T1.FullDateAlternateKey FROM DimDate AS T1 INNER JOIN FactCallCenter AS T2 ON T1.DateKey = T2.DateKey ORDER BY T2.Calls DESC",
+      "error": null,
+      "repaired": true,
+      "seconds": 9.7
+    },
+    {
+      "id": "q42",
+      "question": "Which product category appears most often in survey responses?",
+      "tags": [
+        "easy",
+        "other-area"
+      ],
+      "passed": false,
+      "reason": "error: Driver Error: Syntax error or access violation; DDBC Error: [Microsoft][SQL Server]Ambiguous column name 'EnglishProductCategoryName'.",
+      "sql": null,
+      "error": "Driver Error: Syntax error or access violation; DDBC Error: [Microsoft][SQL Server]Ambiguous column name 'EnglishProductCategoryName'.",
+      "repaired": false,
+      "seconds": 7.0
+    },
+    {
+      "id": "q43",
+      "question": "Which product had the most units taken out of inventory in 2013?",
+      "tags": [
+        "join",
+        "time",
+        "other-area"
+      ],
+      "passed": false,
+      "reason": "error: Driver Error: Column not found; DDBC Error: [Microsoft][SQL Server]Invalid column name 'ProductName'.",
+      "sql": null,
+      "error": "Driver Error: Column not found; DDBC Error: [Microsoft][SQL Server]Invalid column name 'ProductName'.",
+      "repaired": false,
+      "seconds": 8.8
+    },
+    {
+      "id": "q44",
+      "question": "What were the actual travel lodging expenses per department group in 2012?",
+      "tags": [
+        "join",
+        "time",
+        "other-area"
+      ],
+      "passed": false,
+      "reason": "no column matches reference column 2",
+      "sql": "SELECT d.DepartmentGroupName, AVG(f.Amount) AS AverageTravelLodgingExpense FROM FactFinance f JOIN DimDepartmentGroup d ON f.DepartmentGroupKey = d.DepartmentGroupKey JOIN DimDate dd ON f.DateKey = dd.DateKey WHERE dd.CalendarYear = 2012 AND f.AccountKey = (SELECT AccountKey FROM DimAccount WHERE AccountDescription = 'Travel Lodging') GROUP BY d.DepartmentGroupName;",
+      "error": null,
+      "repaired": false,
+      "seconds": 7.7
+    },
+    {
+      "id": "q45",
+      "question": "What was the average euro exchange rate in 2013?",
+      "tags": [
+        "join",
+        "time",
+        "other-area"
+      ],
+      "passed": false,
+      "reason": "error: Driver Error: Column not found; DDBC Error: [Microsoft][SQL Server]Invalid column name 'CalendarYear'.",
+      "sql": null,
+      "error": "Driver Error: Column not found; DDBC Error: [Microsoft][SQL Server]Invalid column name 'CalendarYear'.",
+      "repaired": false,
+      "seconds": 11.2
+    },
+    {
+      "id": "q46",
+      "question": "What's the capital of France?",
+      "tags": [
+        "not-data"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "",
+      "error": null,
+      "repaired": false,
+      "seconds": 1.2
+    },
+    {
+      "id": "q47",
+      "question": "Thanks, that was helpful!",
+      "tags": [
+        "not-data"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "",
+      "error": null,
+      "repaired": false,
+      "seconds": 1.3
+    },
+    {
+      "id": "q48",
+      "question": "What is a data warehouse?",
+      "tags": [
+        "not-data"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "",
+      "error": null,
+      "repaired": false,
+      "seconds": 2.0
+    },
+    {
+      "id": "q49",
+      "question": "Delete all customers from Germany.",
+      "tags": [
+        "not-data",
+        "unsafe"
+      ],
+      "passed": true,
+      "reason": "",
+      "sql": "",
+      "error": null,
+      "repaired": false,
+      "seconds": 1.2
+    },
+    {
+      "id": "q50",
+      "question": "How many employees are there?",
+      "tags": [
+        "easy",
+        "history",
+        "other-area"
+      ],
+      "passed": false,
+      "reason": "no column matches reference column 1",
+      "sql": "SELECT COUNT(EmployeeKey) AS TotalEmployees FROM DimEmployee;",
+      "error": null,
+      "repaired": false,
+      "seconds": 2.6
+    }
+  ]
+}

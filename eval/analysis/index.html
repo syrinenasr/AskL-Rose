@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evaluation Failure Analysis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Same look as docs/schema.html: summary strip, then tables. */
+:root {
+  --bg: #f3f5f6;
+  --surface: #ffffff;
+  --fg: #17222a;
+  --muted: #56656f;
+  --line: #d6dde1;
+  --accent: #1f6f78;
+  --accent-soft: #dcecee;
+  --bad: #b4541c;
+  --bad-soft: #f7e6da;
+  --grey: #8b979e;
+  --grey-soft: #e7eaec;
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11181d; --surface: #182229; --fg: #e4eaee; --muted: #9aa8b1; --line: #2c3a43;
+    --accent: #6cc3cc; --accent-soft: #183238; --bad: #f0955e; --bad-soft: #3a261b; --grey: #6f7d86; --grey-soft: #253038;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11181d; --surface: #182229; --fg: #e4eaee; --muted: #9aa8b1; --line: #2c3a43;
+  --accent: #6cc3cc; --accent-soft: #183238; --bad: #f0955e; --bad-soft: #3a261b; --grey: #6f7d86; --grey-soft: #253038;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.55; padding-inline: 16px; padding-block: 32px 64px; }
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 40px; }
+h1, h2 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(28px, 4.5vw, 40px); font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 22px; font-weight: 700; }
+p { margin: 0; max-width: 72ch; }
+code { font-family: var(--font-mono); font-size: 0.88em; background: var(--grey-soft); padding: 1px 4px; border-radius: 3px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+header, section { display: grid; gap: 14px; }
+header p, .note { color: var(--muted); }
+.note { font-size: 14px; }
+
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 2px; }
+.stat b { font-family: var(--font-display); font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 13px; }
+.stat.good b { color: var(--accent); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 10px 12px; border-top: 1px solid var(--line); vertical-align: top; }
+tr:first-child td { border-top: 0; }
+td.q { font-family: var(--font-mono); font-size: 13px; font-weight: 500; white-space: nowrap; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wide { min-width: 900px; }
+
+.bars { display: grid; gap: 4px; min-width: 220px; }
+.bar { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.bar i { display: block; height: 10px; border-radius: 2px; }
+.bar.with i { background: var(--accent); }
+.bar.without i { background: var(--grey); }
+.bar span { color: var(--muted); }
+
+.chip { display: inline-block; font-family: var(--font-mono); font-size: 12px; padding: 2px 8px; border-radius: 4px; white-space: nowrap; background: var(--grey-soft); color: var(--fg); }
+.chip.gate { background: var(--accent-soft); color: var(--accent); }
+.chip.ours { background: var(--bad-soft); color: var(--bad); }
+
+.labels { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.label { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 8px; align-content: start; }
+.label .chip { justify-self: start; }
+.label p { font-size: 14px; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.filters button { font: inherit; font-size: 13px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.filters button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+tr.hidden { display: none; }
+
+ol, ul { margin: 0; padding-left: 22px; display: grid; gap: 6px; max-width: 80ch; }
+ul.check { list-style: none; padding-left: 0; }
+ul.check li::before { content: "☐ "; color: var(--muted); }
+.conclusion { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 20px; min-height: 120px; color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">AskL-Rose · evaluation · run 2026-11-01 · rescored 2026-11-02</span>
+  <h1>Evaluation: failure analysis</h1>
+  <p>With the semantic layer, qwen2.5-coder:7b answered 31 of 50 questions correctly (62%). Without it, 21 (42%). The layer adds 10 questions.</p>
+</header>
+
+<div class="strip">
+  <div class="stat good"><b>31 / 50</b><span>with the semantic layer (62%)</span></div>
+  <div class="stat"><b>21 / 50</b><span>without (42%)</span></div>
+  <div class="stat"><b>19 of 19</b><span>failures are the model's fault</span></div>
+  <div class="stat"><b>6</b><span>failures from the gate, the largest cause</span></div>
+  <div class="stat"><b>6.5 s</b><span>per question (314 s and 329 s per run)</span></div>
+</div>
+
+<section>
+  <h2>The failure labels</h2>
+  <p>Each failure gets exactly one label: the first thing that went wrong.</p>
+  <div class="labels">
+    <div class="label"><span class="chip gate">gate</span><p>A data question was refused: the model set <code>is_data_question</code> to false and wrote no SQL. Example: q09 "How many customers are registered?"</p></div>
+    <div class="label"><span class="chip">invented column</span><p>The SQL uses a column that doesn't exist in that table, so SQL Server returns "Invalid column name" and the repair didn't fix it. Example: q03 <code>SalesPersonKey</code> instead of <code>EmployeeKey</code>.</p></div>
+    <div class="label"><span class="chip">wrong logic</span><p>The SQL runs but answers a different question: wrong join, wrong aggregation, wrong filter or wrong column. Example: q23 averages order lines instead of orders.</p></div>
+    <div class="label"><span class="chip">T-SQL syntax</span><p>Syntax from another SQL dialect that SQL Server rejects. Here always <code>FETCH FIRST</code> without <code>OFFSET</code> (PostgreSQL style) instead of <code>TOP n</code>.</p></div>
+    <div class="label"><span class="chip">SCD</span><p><b>Slowly Changing Dimension.</b> Ignored the history rows of such a dimension: DimProduct and DimEmployee keep old versions, and "current" needs <code>Status = 'Current'</code>. Example: q08.</p></div>
+    <div class="label"><span class="chip ours">question design</span><p>Our fault, not the model's: the question is ambiguous, hides a tie, or the grader is too strict. No failure carries this label any more: the grader fixes below removed them (q16 was reworded and now fails on the model's logic; q36 passes with the tolerance).</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Setup and scores</h2>
+  <ul>
+    <li>Model: qwen2.5-coder:7b through Ollama, temperature 0, self-repair on in both runs.</li>
+    <li>Runs: 2026-11-01 at 01:16 (with) and 02:27 (without), rescored on 2026-11-02 with the fixed grader. Saved in <code>eval/results/</code> as <code>…_rescored.json</code>.</li>
+    <li>Repairs: 4 with (3 then passed), 9 without (3 then passed).</li>
+  </ul>
+  <div class="card">
+    <table>
+      <thead><tr><th>Tag</th><th>Questions</th><th>With</th><th>Without</th><th>Share passed</th></tr></thead>
+      <tbody>
+        <tr><td><b>all</b></td><td class="num">50</td><td class="num"><b>31</b></td><td class="num">21</td><td><div class="bars"><div class="bar with"><i style="width:62%"></i>62%</div><div class="bar without"><i style="width:42%"></i><span>42%</span></div></div></td></tr>
+        <tr><td>join</td><td class="num">29</td><td class="num">19</td><td class="num">9</td><td><div class="bars"><div class="bar with"><i style="width:66%"></i>66%</div><div class="bar without"><i style="width:31%"></i><span>31%</span></div></div></td></tr>
+        <tr><td>time</td><td class="num">18</td><td class="num">10</td><td class="num">5</td><td><div class="bars"><div class="bar with"><i style="width:56%"></i>56%</div><div class="bar without"><i style="width:28%"></i><span>28%</span></div></div></td></tr>
+        <tr><td>other-area</td><td class="num">18</td><td class="num">9</td><td class="num">5</td><td><div class="bars"><div class="bar with"><i style="width:50%"></i>50%</div><div class="bar without"><i style="width:28%"></i><span>28%</span></div></div></td></tr>
+        <tr><td>semantic</td><td class="num">16</td><td class="num">10</td><td class="num">5</td><td><div class="bars"><div class="bar with"><i style="width:62%"></i>62%</div><div class="bar without"><i style="width:31%"></i><span>31%</span></div></div></td></tr>
+        <tr><td>easy</td><td class="num">13</td><td class="num">6</td><td class="num">6</td><td><div class="bars"><div class="bar with"><i style="width:46%"></i>46%</div><div class="bar without"><i style="width:46%"></i><span>46%</span></div></div></td></tr>
+        <tr><td>not-data</td><td class="num">5</td><td class="num">5</td><td class="num">5</td><td><div class="bars"><div class="bar with"><i style="width:100%"></i>100%</div><div class="bar without"><i style="width:100%"></i><span>100%</span></div></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">Teal = with the semantic layer, grey = without. A question counts in every tag it carries. Tags with 3 questions or fewer (history, seen, ambiguous, unsafe) are left out.</p>
+</section>
+
+<section>
+  <h2>Grader fixes before concluding</h2>
+  <p>The first analysis found mistakes in our grader, not the model. They were fixed with general rules decided from the questions' wording, then both runs were rescored from their saved SQL (no new model calls). Details are in <code>docs/sessions.md</code>, Session 9.</p>
+  <div class="card">
+    <table class="wide">
+      <thead><tr><th>Fix</th><th>What changed</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>Order</td><td><code>ordered: true</code> only when the question asks for a sorted or ranked answer: now none of the 50. A wrong order is reported as "rows in a different order".</td><td>q01, q38 pass without the layer</td></tr>
+        <tr><td>Tolerance</td><td>Numbers may differ by 0.1% (at least 0.01): dividing <code>money</code> values loses precision.</td><td>q36 passes in both runs</td></tr>
+        <tr><td>q16 reworded</td><td>"Which reseller…" → "Which resellers have the most employees?", since 6 tie. Asked again in both settings.</td><td>Still fails: the model keeps <code>TOP 1</code>. Now a model failure.</td></tr>
+        <tr><td>Scores</td><td colspan="2">With: 30 → <b>31</b>. Without: 18 → <b>21</b>. Gap: +12 → <b>+10</b>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>The five steps</h2>
+  <p>Every failure from the run with the semantic layer went through the same five steps.</p>
+  <ol>
+    <li><b>Read the reason</b> run.py gave: an SQL error, "treated as not a data question", a wrong row count, or "no column matches" (different values).</li>
+    <li><b>Compare the SQL</b>: the model's query next to the reference in <code>eval/questions.yaml</code>, looking for the first difference.</li>
+    <li><b>Run both</b> against the database and compare the actual numbers.</li>
+    <li><b>Decide whose fault it is</b>: the model's, or ours (an ambiguous question, a tie, a rounding difference).</li>
+    <li><b>Give it one cause label</b>, so failures can be counted.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Counts by cause</h2>
+  <p>The gate and wrong logic cause 6 of the 19 failures each, the largest causes.</p>
+  <div class="card">
+    <table>
+      <thead><tr><th>Cause</th><th>Count</th><th></th><th>Questions</th><th>Without the layer</th></tr></thead>
+      <tbody>
+        <tr><td><span class="chip gate">gate</span></td><td class="num"><b>6</b></td><td><div class="bar with"><i style="width:180px"></i></div></td><td>q06 q09 q11 q14 q44 q50</td><td class="num">1 (q11)</td></tr>
+        <tr><td><span class="chip">wrong logic</span></td><td class="num"><b>6</b></td><td><div class="bar without"><i style="width:180px"></i></div></td><td>q15 q16 q20 q23 q27 q31</td><td></td></tr>
+        <tr><td><span class="chip">invented column</span></td><td class="num">4</td><td><div class="bar without"><i style="width:120px"></i></div></td><td>q03 q04 q41 q45</td><td class="num">5</td></tr>
+        <tr><td><span class="chip">T-SQL syntax</span></td><td class="num">2</td><td><div class="bar without"><i style="width:60px"></i></div></td><td>q32 q37</td><td class="num">3 (q29 q32 q40)</td></tr>
+        <tr><td><span class="chip">SCD</span></td><td class="num">1</td><td><div class="bar without"><i style="width:30px"></i></div></td><td>q08</td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>The 19 failures, one by one</h2>
+  <p>All 19 failures are the model's fault. "Model vs reference" is what both queries actually return; a dash means the model ran no SQL or its SQL failed.</p>
+  <div class="filters" id="filters">
+    <button aria-pressed="true" data-label="all">All 19</button>
+    <button aria-pressed="false" data-label="gate">gate</button>
+    <button aria-pressed="false" data-label="wrong logic">wrong logic</button>
+    <button aria-pressed="false" data-label="invented column">invented column</button>
+    <button aria-pressed="false" data-label="T-SQL syntax">T-SQL syntax</button>
+    <button aria-pressed="false" data-label="SCD">SCD</button>
+  </div>
+  <div class="card">
+    <table class="wide" id="failures">
+      <thead><tr><th>Q</th><th>Question</th><th>What went wrong (steps 1–2)</th><th>Model vs reference (step 3)</th><th>Fault</th><th>Label</th></tr></thead>
+      <tbody>
+        <tr data-label="gate"><td class="q">q09</td><td>How many customers are registered?</td><td>Refused as not a data question. Its explanation even names the right table: "count the distinct CustomerKey values in DimCustomer".</td><td class="num">– vs 18,484</td><td>Model</td><td><span class="chip gate">gate</span></td></tr>
+        <tr data-label="gate"><td class="q">q11</td><td>How many resellers are warehouses?</td><td>Refused as not a data question.</td><td class="num">– vs 232</td><td>Model</td><td><span class="chip gate">gate</span></td></tr>
+        <tr data-label="gate"><td class="q">q14</td><td>What is the currency code of the euro?</td><td>Refused. The explanation just repeats the question.</td><td class="num">– vs EUR</td><td>Model</td><td><span class="chip gate">gate</span></td></tr>
+        <tr data-label="gate"><td class="q">q50</td><td>How many employees are there?</td><td>Refused: "count the distinct EmployeeKey values… However, the question is not about the data".</td><td class="num">– vs 290</td><td>Model</td><td><span class="chip gate">gate</span></td></tr>
+        <tr data-label="gate"><td class="q">q44</td><td>Actual travel lodging expenses per department group in 2012?</td><td>Refused. A hard question: 5 tables, a parent-child account tree.</td><td>– vs 7 rows (Corporate 46,218.69, …)</td><td>Model</td><td><span class="chip gate">gate</span></td></tr>
+        <tr data-label="gate"><td class="q">q06</td><td>Who is the most loyal customer?</td><td>Refused. Also ambiguous: "loyal" is not in the semantic layer (orders? revenue? years?).</td><td>– vs Dalton Perez and Mason Roberts (tie)</td><td>Model; question vague</td><td><span class="chip gate">gate</span></td></tr>
+        <tr data-label="invented column"><td class="q">q03</td><td>Who is the employee with the most sales every year?</td><td>Used <code>SalesPersonKey</code>; the column is <code>EmployeeKey</code>. Repair failed.</td><td>error vs 4 rows (2010 José Saraiva, …)</td><td>Model</td><td><span class="chip">invented column</span></td></tr>
+        <tr data-label="invented column"><td class="q">q04</td><td>Which salespeople met their sales quota in 2011?</td><td><code>SalesAmount</code> in FactSalesQuota; the column is <code>SalesAmountQuota</code>.</td><td>error vs Pamela Ansman-Wolfe</td><td>Model</td><td><span class="chip">invented column</span></td></tr>
+        <tr data-label="invented column"><td class="q">q41</td><td>On which date did the call center receive the most calls?</td><td>Column <code>Date</code>; the date is <code>FullDateAlternateKey</code> in DimDate.</td><td class="num">error vs 2014-05-18</td><td>Model</td><td><span class="chip">invented column</span></td></tr>
+        <tr data-label="invented column"><td class="q">q45</td><td>What was the average euro exchange rate in 2013?</td><td><code>FiscalYear</code> in FactCurrencyRate; the year needs a join to DimDate.</td><td class="num">error vs 0.9305</td><td>Model</td><td><span class="chip">invented column</span></td></tr>
+        <tr data-label="wrong logic"><td class="q">q20</td><td>Total sales revenue across internet and reseller sales?</td><td>Joined the two fact tables on SalesOrderNumber. They share no order, so the result is empty. The semantic layer says "never join the two fact tables": ignored.</td><td class="num">NULL vs 109,809,274.20</td><td>Model</td><td><span class="chip">wrong logic</span></td></tr>
+        <tr data-label="wrong logic"><td class="q">q23</td><td>What is the average online order value?</td><td><code>AVG(SalesAmount)</code> averages order lines, not orders. "Order value" is not in the semantic layer.</td><td class="num">486.09 vs 1,061.45</td><td>Model</td><td><span class="chip">wrong logic</span></td></tr>
+        <tr data-label="wrong logic"><td class="q">q27</td><td>How many customers bought both a bike and a helmet?</td><td>Looked for products named exactly 'Bike' and 'Helmet' instead of the Bikes category and the Helmets subcategory.</td><td class="num">0 vs 3,023</td><td>Model</td><td><span class="chip">wrong logic</span></td></tr>
+        <tr data-label="wrong logic"><td class="q">q31</td><td>Monthly internet sales in 2013 compared to 2012</td><td>The same SUM in both columns, so "2012" and "2013" both hold the two-year total.</td><td>January: 1,353,054.04 twice vs 495,364.13 and 857,689.91</td><td>Model</td><td><span class="chip">wrong logic</span></td></tr>
+        <tr data-label="wrong logic"><td class="q">q15</td><td>How many customers have more than 3 children?</td><td><code>NumberChildrenAtHome</code> instead of <code>TotalChildren</code>.</td><td class="num">2,056 vs 3,727</td><td>Model (debatable)</td><td><span class="chip">wrong logic</span></td></tr>
+        <tr data-label="SCD"><td class="q">q08</td><td>Which products currently have the highest list price?</td><td>No <code>Status = 'Current'</code>, so it returns the discontinued Road-150 Red.</td><td>Road-150 Red (5 sizes) vs Road-250 (5 sizes)</td><td>Model</td><td><span class="chip">SCD</span></td></tr>
+        <tr data-label="T-SQL syntax"><td class="q">q32</td><td>Which month of 2013 had the highest online revenue?</td><td><code>FETCH FIRST</code> without <code>OFFSET</code> is not valid T-SQL. Repair failed.</td><td>error vs December</td><td>Model</td><td><span class="chip">T-SQL syntax</span></td></tr>
+        <tr data-label="T-SQL syntax"><td class="q">q37</td><td>On which day of the week do customers place the most online orders?</td><td>Same <code>FETCH FIRST</code> error.</td><td>error vs Tuesday</td><td>Model</td><td><span class="chip">T-SQL syntax</span></td></tr>
+        <tr data-label="wrong logic"><td class="q">q16</td><td>Which resellers have the most employees?</td><td>6 resellers tie at 100 employees. Even with the plural wording, the model takes <code>TOP 1</code> and ignores the tie (asked again in both settings).</td><td>Volume Bike Sellers vs 6 names</td><td>Model</td><td><span class="chip">wrong logic</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>With vs without: the 16 questions that flip</h2>
+  <p>A question <b>flips</b> when it gets a different result in the two runs: it passes with the semantic layer and fails without it, or the other way round.</p>
+  <div class="card" style="max-width: 420px">
+    <table>
+      <thead><tr><th>Run</th><th>Passed</th><th>Failed</th></tr></thead>
+      <tbody>
+        <tr><td><b>With</b> the semantic layer</td><td class="num">31</td><td class="num">19</td></tr>
+        <tr><td><b>Without</b> it</td><td class="num">21</td><td class="num">29</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Each question has a result in both runs, which gives four groups. Rows add up to the "with" totals, columns to the "without" totals.</p>
+  <div class="card">
+    <table>
+      <thead><tr><th></th><th>Passes without (21)</th><th>Fails without (29)</th></tr></thead>
+      <tbody>
+        <tr><th>Passes with (31)</th><td><b>18</b> pass both times<br><span class="note">q01 q02 q05 q10 q12 q13 q18 q19 q24 q26 q28 q36 q38 q39 q46 q47 q48 q49</span></td><td><b>13</b> <span class="chip gate">flip: layer helped</span><br><span class="note">listed in the table below</span></td></tr>
+        <tr><th>Fails with (19)</th><td><b>3</b> <span class="chip ours">flip: layer hurt</span><br><span class="note">q09 q14 q37</span></td><td><b>16</b> fail both times<br><span class="note">q03 q04 q06 q08 q11 q15 q16 q20 q23 q27 q31 q32 q41 q44 q45 q50</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The 34 questions that don't flip are 18 + 16. The 18 that pass both times are simple questions, single joins the model handles alone, and the 5 non-data questions: they didn't need the layer. The 16 that fail both times weren't saved by it: invented columns, wrong logic, <code>FETCH FIRST</code>, the gate, and q16's ignored tie.</p>
+  <p>The flips matter most because the semantic layer is the only thing that changed between the two runs: same model, same questions, same settings. When a question flips, the layer (or chance) made the difference. The 34 questions that don't flip say nothing about the layer: they were easy enough without it, or too hard even with it.</p>
+  <p>13 questions pass only with the semantic layer and 3 pass only without it, a net gain of <b>+10</b>. In 10 of the 13, the model used a definition from the layer; 3 flipped for no clear reason (the model is a bit random, since a different prompt leads to different SQL). q01 and q38 used to be counted here: they were our grader's fault and now pass both times.</p>
+  <div class="card">
+    <table class="wide">
+      <thead><tr><th>Q</th><th>Without the layer</th><th>With the layer</th><th>Why it flips</th></tr></thead>
+      <tbody>
+        <tr><td class="q">q07</td><td>Profit = SalesAmount − TaxAmt − DiscountAmount</td><td>SalesAmount − TotalProductCost</td><td><span class="chip gate">layer</span> gross profit</td></tr>
+        <tr><td class="q">q30</td><td>Profit with ProductStandardCost (cost of one unit)</td><td>TotalProductCost</td><td><span class="chip gate">layer</span> gross profit</td></tr>
+        <tr><td class="q">q22</td><td><code>COUNT(*)</code> counts order lines; <code>CountryRegionCode = 'Germany'</code> (the code is 'DE')</td><td><code>COUNT(DISTINCT SalesOrderNumber)</code>, country name</td><td><span class="chip gate">layer</span> number of orders, customer country</td></tr>
+        <tr><td class="q">q35</td><td><code>COUNT(*)</code> counts order lines</td><td><code>COUNT(DISTINCT SalesOrderNumber)</code></td><td><span class="chip gate">layer</span> number of orders</td></tr>
+        <tr><td class="q">q34</td><td><code>DATEPART(FiscalYear, …)</code>: an error</td><td><code>DimDate.FiscalYear</code></td><td><span class="chip gate">layer</span> fiscal year</td></tr>
+        <tr><td class="q">q33</td><td>Invented <code>DateKey</code> in FactInternetSales</td><td><code>OrderDateKey = DateKey</code></td><td><span class="chip gate">layer</span> year</td></tr>
+        <tr><td class="q">q21</td><td>Invented subcategory column name</td><td><code>EnglishProductSubcategoryName</code></td><td><span class="chip gate">layer</span> product subcategory</td></tr>
+        <tr><td class="q">q43</td><td>Invented <code>ProductName</code></td><td><code>EnglishProductName</code></td><td><span class="chip gate">layer</span> product name</td></tr>
+        <tr><td class="q">q42</td><td>Ambiguous column name (no table prefix)</td><td>Correct join to DimProductCategory</td><td><span class="chip gate">layer</span> product category</td></tr>
+        <tr><td class="q">q17</td><td>Grouped by ProductKey, so each product version counts apart (Road-150 Red wins)</td><td>Grouped by name (Mountain-200 wins)</td><td><span class="chip gate">layer</span> product name</td></tr>
+        <tr><td class="q">q25</td><td>Conversion error</td><td>Correct</td><td><span class="chip">unclear</span> no definition involved</td></tr>
+        <tr><td class="q">q29</td><td><code>FETCH FIRST</code> error</td><td><code>TOP 1</code></td><td><span class="chip">unclear</span> syntax luck</td></tr>
+        <tr><td class="q">q40</td><td><code>FETCH FIRST</code> error</td><td><code>TOP 1</code></td><td><span class="chip">unclear</span> syntax luck</td></tr>
+        <tr><td class="q">q09</td><td>Correct count</td><td>Refused as not a data question</td><td><span class="chip ours">layer hurt</span> gate</td></tr>
+        <tr><td class="q">q14</td><td>Correct</td><td>Refused as not a data question</td><td><span class="chip ours">layer hurt</span> gate</td></tr>
+        <tr><td class="q">q37</td><td><code>TOP 1</code>, correct</td><td><code>FETCH FIRST</code> error</td><td><span class="chip">unclear</span> syntax luck</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">q09 shows the gate problem clearly: the layer itself says "for all registered customers, count DimCustomer", yet the model refused to write SQL.</p>
+</section>
+
+<section>
+  <h2>Conclusion</h2>
+  <p>The conclusion answers these questions from the tables above.</p>
+  <ul class="check">
+    <li>Does the semantic layer help? By how much (31 vs 21)?</li>
+    <li>Where does it help: which tags, and through which definitions (see the flips)?</li>
+    <li>Where does it hurt, and why might a longer prompt make the gate refuse simple questions?</li>
+    <li>Of the 19 model failures, which are general problems (gate, invented columns, <code>FETCH FIRST</code>, ignored ties) and which are one-off (helmets as a product name)?</li>
+    <li>Which failures could the semantic layer fix with a new definition (order value, current product, current employee, loyal customer), and which need a prompt or code change?</li>
+    <li>What is the first fix, and which questions are re-run to check it?</li>
+  </ul>
+  <div class="conclusion">To be written.</div>
+</section>
+
+</div>
+<script>
+// Filter the failures table by cause label.
+const buttons = document.querySelectorAll("#filters button");
+buttons.forEach(button => button.addEventListener("click", () => {
+  buttons.forEach(b => b.setAttribute("aria-pressed", b === button));
+  const label = button.dataset.label;
+  document.querySelectorAll("#failures tbody tr").forEach(row => {
+    row.classList.toggle("hidden", label !== "all" && row.dataset.label !== label);
+  });
+}));
+</script>
+</body>
+</html>
