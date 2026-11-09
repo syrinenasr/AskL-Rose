@@ -2,7 +2,7 @@
 
 Ask a data warehouse questions in plain English. A local LLM writes the T-SQL, the app runs it on SQL Server and shows the results in a chat.
 
-> 🚧 **Work in progress.** The chatbox and the semantic layer work end to end today; safety checks, self-repair and an evaluation are next (see the roadmap).
+> 🚧 **Work in progress.** The chatbox, the semantic layer, the safety checks, self-repair and an [evaluation](#evaluation) on 50 questions work today. Comparing models and packaging the app in its own container are next (see the roadmap).
 
 ## What works now
 
@@ -26,6 +26,7 @@ question ──► schema + business definitions + question ──► local LLM 
 | `semantic.py` | reads `semantic_layer.yaml` and formats it as text for the model |
 | `db.py` | opens a read-only connection to SQL Server, as the `askl_reader` login |
 | `safety.py` | `check_sql()`: rejects anything that isn't a single `SELECT`, before it reaches SQL Server |
+| `eval/` | the [evaluation](#evaluation): 50 questions with reference SQL (`questions.yaml`), the grader (`run.py`), saved runs and the analysis |
 
 The model runs **on your machine** with [Ollama](https://ollama.com): no data leaves it. The default is `qwen2.5-coder:7b`; set `OLLAMA_MODEL` to try another one.
 
@@ -174,6 +175,50 @@ The repaired SQL goes through `check_sql()` again, so a fix is held to the same 
 
 The repaired query grouped by `SalesTerritoryAlternateKey`, a code (4), instead of the territory's name. **Self-repair fixes errors, not quality.** So a *sales territory* term now tells the model to use `SalesTerritoryRegion`, and the question is answered right on the first try: **Southwest**, 18,466,458.79. The two work together: the semantic layer prevents mistakes, and self-repair catches the ones it doesn't cover.
 
+## Evaluation
+
+Does the semantic layer actually help, and where does the model still fail? `eval/` answers that with numbers instead of a few hand-picked examples.
+
+**The questions.** `eval/questions.yaml` holds 50 questions a business user might ask, each with a **reference SQL** query checked by hand against the database. They are tagged (`join`, `time`, `semantic`, `easy`, `not-data`, …), and 5 are not data questions at all (*"Hi"*, an unsafe request), where the right answer is to run no SQL.
+
+**The grader.** `eval/run.py` asks the app each question, runs the model's SQL and the reference SQL, and compares the **result rows**, not the SQL text: two different queries that return the same answer both pass. The comparison ignores column names and order, allows extra columns, rounds numbers to 2 decimals with a 0.1% tolerance, and checks row order only when the question asks for a sorted answer. A wrong number of rows, a missing value or values paired with the wrong rows all fail.
+
+**Results.** `qwen2.5-coder:7b`, temperature 0, self-repair on, the same 50 questions with and without the semantic layer:
+
+| | With the semantic layer | Without |
+|---|---|---|
+| **All 50 questions** | **31 (62%)** | 21 (42%) |
+| needing joins (29) | 19 | 9 |
+| about dates (18) | 10 | 5 |
+| using a business definition (16) | 10 | 5 |
+| easy (13) | 6 | 6 |
+| not data questions (5) | 5 | 5 |
+
+The layer adds **10 questions**: 13 pass only with it, 3 only without it. In 10 of the 13, the SQL uses a definition from the layer (gross profit, number of orders, fiscal year, product name, …). Easy questions don't need it: they score the same both ways.
+
+**Why the 19 remaining questions fail**, each labelled with the first thing that went wrong:
+
+| Cause | Count | Example |
+|---|---|---|
+| refused a data question as "not a data question" | 6 | *"How many customers are registered?"* |
+| SQL that runs but answers a different question | 6 | averaging order lines instead of orders |
+| a column that doesn't exist | 4 | `SalesPersonKey` instead of `EmployeeKey` |
+| `FETCH FIRST` without `OFFSET`, which isn't T-SQL | 2 | instead of `TOP 1` |
+| old product versions not filtered out | 1 | a discontinued bike as the most expensive "current" product |
+
+**Keeping the score fair.** The first analysis found mistakes in the grader too, such as failing correct but unsorted answers and a rounding difference. They were fixed with general rules decided from the questions' wording, not from which answers failed, and both runs were re-scored from their saved SQL with `--rescore`, without asking the model again. The full analysis, question by question, is in [`eval/analysis/`](eval/analysis/README.md).
+
+**Run it** (SQL Server and Ollama running, as in [Run it](#run-it)):
+
+```sh
+uv run --env-file .env python -m eval.run                 # all 50 questions, with the semantic layer
+uv run --env-file .env python -m eval.run --no-semantic   # without it
+uv run --env-file .env python -m eval.run --only q01,q27  # a few questions
+uv run --env-file .env python -m eval.run --rescore eval/results/<file>.json   # grade saved SQL again, no model calls
+```
+
+Each run prints the score per tag and saves every answer to `eval/results/`.
+
 ## Run it
 
 ### Quick start
@@ -272,7 +317,7 @@ The 7B model handles questions well when the semantic layer defines their words,
 - *"how many customers bought both a bike and a helmet"* returned **0**;
 - *"monthly internet sales in 2013 compared to 2012"* returned identical numbers in both year columns.
 
-The evaluation step on the roadmap is meant to measure how often this happens: questions with known answers, scored automatically.
+The [evaluation](#evaluation) measures how often this happens: it is the cause of 6 of the 19 failures with the semantic layer.
 
 ## Roadmap
 
@@ -284,7 +329,8 @@ The evaluation step on the roadmap is meant to measure how often this happens: q
 - [x] Semantic layer: business definitions of metrics, terms and rules (`semantic_layer.yaml`)
 - [x] Safety: only SELECT statements, a read-only login, row limits and timeouts
 - [x] Self-repair: send SQL errors back to the model once
-- [ ] Evaluation: 50 test questions, scored by comparing query results; compare models
+- [x] Evaluation: 50 test questions, scored by comparing query results, with and without the semantic layer
+- [ ] Evaluation: compare models, and measure prompt fixes for the most common failures
 - [ ] The app in its own container
 
 ## License note
